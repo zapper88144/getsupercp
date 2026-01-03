@@ -1,5 +1,11 @@
 # SuperCP (Get Super Control Panel)
 
+
+
+
+https://github.com/user-attachments/assets/4706ca09-2ff8-47ce-a446-ac2fad3159b4
+
+
 SuperCP is a modern, high-performance hosting control panel built with Laravel 12, React 18, and a custom Rust-based system daemon. It provides a comprehensive suite of tools for managing web servers, domains, databases, and more.
 
 ## Features
