@@ -196,7 +196,7 @@ export default function Dashboard({ stats, counts }: Props) {
                     <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
                         <div className="overflow-hidden rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
                             <h3 className="text-lg font-medium text-gray-900 dark:text-white">CPU Usage History (%)</h3>
-                            <div className="mt-6 h-64 w-full">
+                            <div className="mt-6 min-h-64 w-full" style={{ minWidth: '0px', height: '256px' }}>
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={history}>
                                         <defs>
@@ -220,7 +220,7 @@ export default function Dashboard({ stats, counts }: Props) {
 
                         <div className="overflow-hidden rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
                             <h3 className="text-lg font-medium text-gray-900 dark:text-white">RAM Usage History (%)</h3>
-                            <div className="mt-6 h-64 w-full">
+                            <div className="mt-6 min-h-64 w-full" style={{ minWidth: '0px', height: '256px' }}>
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={history}>
                                         <defs>

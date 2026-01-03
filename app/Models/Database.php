@@ -31,7 +31,7 @@ class Database extends Model
     protected function casts(): array
     {
         return [
-            'db_password' => 'hashed',
+            'db_password' => 'encrypted',
         ];
     }
 }

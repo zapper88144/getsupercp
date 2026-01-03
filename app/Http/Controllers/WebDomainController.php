@@ -131,10 +131,23 @@ class WebDomainController extends Controller
                 'domain' => $webDomain->domain,
             ]);
 
+            $certificatePath = "/etc/letsencrypt/live/{$webDomain->domain}/fullchain.pem";
+            $keyPath = "/etc/letsencrypt/live/{$webDomain->domain}/privkey.pem";
+            $expiresAt = null;
+
+            // Extract expiration date from the certificate if it exists
+            if (file_exists($certificatePath)) {
+                $certData = openssl_x509_parse(file_get_contents($certificatePath));
+                if ($certData && isset($certData['validTo_time_t'])) {
+                    $expiresAt = \Carbon\Carbon::createFromTimestamp($certData['validTo_time_t']);
+                }
+            }
+
             $webDomain->update([
                 'has_ssl' => true,
-                'ssl_certificate_path' => "/etc/letsencrypt/live/{$webDomain->domain}/fullchain.pem",
-                'ssl_key_path' => "/etc/letsencrypt/live/{$webDomain->domain}/privkey.pem",
+                'ssl_certificate_path' => $certificatePath,
+                'ssl_key_path' => $keyPath,
+                'ssl_expires_at' => $expiresAt,
             ]);
 
             // Update vhost to use the new cert
@@ -148,7 +161,7 @@ class WebDomainController extends Controller
                 'ssl_key_path' => $webDomain->ssl_key_path,
             ]);
         } catch (\Exception $e) {
-            return back()->withErrors(['daemon' => 'Failed to request SSL certificate: ' . $e->getMessage()]);
+            return back()->withErrors(['daemon' => 'Failed to request SSL certificate: '.$e->getMessage()]);
         }
 
         return redirect()->route('web-domains.index');

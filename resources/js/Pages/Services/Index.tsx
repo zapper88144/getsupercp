@@ -12,6 +12,7 @@ import {
     CheckCircleIcon,
     XCircleIcon,
     ExclamationCircleIcon,
+    XMarkIcon,
 } from '@heroicons/react/24/outline';
 
 interface ServiceStatus {
@@ -23,6 +24,9 @@ export default function Index() {
     const [loading, setLoading] = useState(true);
     const [restarting, setRestarting] = useState<string | null>(null);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [selectedServiceLogs, setSelectedServiceLogs] = useState<string | null>(null);
+    const [serviceLogs, setServiceLogs] = useState<string>('');
+    const [logsLoading, setLogsLoading] = useState(false);
 
     const fetchStatus = async () => {
         setIsRefreshing(true);
@@ -34,6 +38,20 @@ export default function Index() {
         } finally {
             setLoading(false);
             setIsRefreshing(false);
+        }
+    };
+
+    const fetchServiceLogs = async (service: string) => {
+        setLogsLoading(true);
+        try {
+            const response = await axios.get(`/services/logs/${service}`, {
+                params: { lines: 50 }
+            });
+            setServiceLogs(response.data.content || 'No logs available');
+        } catch (error: any) {
+            setServiceLogs('Error loading logs: ' + (error.response?.data?.message || error.message));
+        } finally {
+            setLogsLoading(false);
         }
     };
 
@@ -187,6 +205,18 @@ export default function Index() {
 
                                             {id !== 'daemon' && (
                                                 <button
+                                                    onClick={() => {
+                                                        setSelectedServiceLogs(id);
+                                                        fetchServiceLogs(id);
+                                                    }}
+                                                    className="inline-flex items-center rounded-lg bg-gray-50 px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 dark:bg-gray-900/50 dark:text-gray-300 dark:hover:bg-gray-900"
+                                                >
+                                                    View Logs
+                                                </button>
+                                            )}
+
+                                            {id !== 'daemon' && (
+                                                <button
                                                     onClick={() => restartService(id)}
                                                     disabled={restarting !== null}
                                                     className="inline-flex items-center rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 transition-colors hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-indigo-900/20 dark:text-indigo-400 dark:hover:bg-indigo-900/40"
@@ -208,6 +238,49 @@ export default function Index() {
                                     </div>
                                 );
                             })}
+                        </div>
+                    )}
+
+                    {selectedServiceLogs && (
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-3xl w-full max-h-[80vh] flex flex-col">
+                                <div className="flex items-center justify-between border-b border-gray-200 dark:border-gray-700 p-6">
+                                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                        {selectedServiceLogs.toUpperCase()} Logs (Last 50 lines)
+                                    </h3>
+                                    <button
+                                        onClick={() => setSelectedServiceLogs(null)}
+                                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                    >
+                                        <XMarkIcon className="w-6 h-6" />
+                                    </button>
+                                </div>
+                                <div className="flex-1 overflow-auto p-6 bg-gray-50 dark:bg-gray-900">
+                                    {logsLoading ? (
+                                        <div className="flex items-center justify-center h-full">
+                                            <ArrowPathIcon className="w-6 h-6 animate-spin text-indigo-500" />
+                                        </div>
+                                    ) : (
+                                        <pre className="text-xs text-gray-700 dark:text-gray-300 font-mono whitespace-pre-wrap break-words">
+                                            {serviceLogs}
+                                        </pre>
+                                    )}
+                                </div>
+                                <div className="border-t border-gray-200 dark:border-gray-700 p-4 flex justify-end gap-2">
+                                    <button
+                                        onClick={() => fetchServiceLogs(selectedServiceLogs)}
+                                        className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600 transition-colors"
+                                    >
+                                        Refresh
+                                    </button>
+                                    <button
+                                        onClick={() => setSelectedServiceLogs(null)}
+                                        className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                                    >
+                                        Close
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     )}
                 </div>
