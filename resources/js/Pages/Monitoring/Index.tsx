@@ -67,8 +67,8 @@ export default function Index({ stats: initialStats }: { stats: Stats }) {
             setHistory(prev => {
                 const newHistory = [...prev, {
                     time: now,
-                    cpu: parseFloat(newStats.cpu_usage.toFixed(1)),
-                    memory: parseFloat(((newStats.memory.used / newStats.memory.total) * 100).toFixed(1))
+                    cpu: parseFloat((newStats?.cpu_usage ?? 0).toFixed(1)),
+                    memory: parseFloat((( (newStats?.memory?.used ?? 0) / (newStats?.memory?.total ?? 1)) * 100).toFixed(1))
                 }];
                 return newHistory.slice(-20); // Keep last 20 points
             });
@@ -144,7 +144,7 @@ export default function Index({ stats: initialStats }: { stats: Stats }) {
                                 <div>
                                     <p className="text-sm font-medium text-gray-500 dark:text-gray-400">CPU Usage</p>
                                     <p className="mt-1 text-2xl font-semibold text-gray-900 dark:text-white">
-                                        {stats.cpu_usage.toFixed(1)}%
+                                        {(stats?.cpu_usage ?? 0).toFixed(1)}%
                                     </p>
                                 </div>
                                 <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
@@ -155,11 +155,11 @@ export default function Index({ stats: initialStats }: { stats: Stats }) {
                                 <div className="h-2 w-full rounded-full bg-gray-100 dark:bg-gray-700">
                                     <div
                                         className="h-2 rounded-full bg-blue-500 transition-all duration-500"
-                                        style={{ width: `${stats.cpu_usage}%` }}
+                                        style={{ width: `${stats?.cpu_usage ?? 0}%` }}
                                     />
                                 </div>
                                 <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                                    Load: {stats.load_average[0].toFixed(2)} {stats.load_average[1].toFixed(2)} {stats.load_average[2].toFixed(2)}
+                                    Load: {(stats?.load_average?.[0] ?? 0).toFixed(2)} {(stats?.load_average?.[1] ?? 0).toFixed(2)} {(stats?.load_average?.[2] ?? 0).toFixed(2)}
                                 </p>
                             </div>
                         </div>
@@ -170,7 +170,7 @@ export default function Index({ stats: initialStats }: { stats: Stats }) {
                                 <div>
                                     <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Memory Usage</p>
                                     <p className="mt-1 text-2xl font-semibold text-gray-900 dark:text-white">
-                                        {((stats.memory.used / stats.memory.total) * 100).toFixed(1)}%
+                                        {(( (stats?.memory?.used ?? 0) / (stats?.memory?.total ?? 1)) * 100).toFixed(1)}%
                                     </p>
                                 </div>
                                 <div className="rounded-lg bg-green-50 p-3 dark:bg-green-900/20">
@@ -181,11 +181,11 @@ export default function Index({ stats: initialStats }: { stats: Stats }) {
                                 <div className="h-2 w-full rounded-full bg-gray-100 dark:bg-gray-700">
                                     <div
                                         className="h-2 rounded-full bg-green-500 transition-all duration-500"
-                                        style={{ width: `${(stats.memory.used / stats.memory.total) * 100}%` }}
+                                        style={{ width: `${((stats?.memory?.used ?? 0) / (stats?.memory?.total ?? 1)) * 100}%` }}
                                     />
                                 </div>
                                 <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                                    {stats.memory.used} MB / {stats.memory.total} MB
+                                    {stats?.memory?.used ?? 0} MB / {stats?.memory?.total ?? 0} MB
                                 </p>
                             </div>
                         </div>
@@ -196,7 +196,7 @@ export default function Index({ stats: initialStats }: { stats: Stats }) {
                                 <div>
                                     <p className="text-sm font-medium text-gray-500 dark:text-gray-400">System Uptime</p>
                                     <p className="mt-1 text-2xl font-semibold text-gray-900 dark:text-white">
-                                        {formatUptime(stats.uptime)}
+                                        {formatUptime(stats?.uptime ?? 0)}
                                     </p>
                                 </div>
                                 <div className="rounded-lg bg-purple-50 p-3 dark:bg-purple-900/20">
@@ -215,7 +215,7 @@ export default function Index({ stats: initialStats }: { stats: Stats }) {
                                     <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Network Activity</p>
                                     <div className="mt-1 flex items-baseline gap-2">
                                         <span className="text-2xl font-semibold text-gray-900 dark:text-white">
-                                            {formatBytes(stats.networks[0]?.received || 0)}/s
+                                            {formatBytes(stats?.networks?.[0]?.received || 0)}/s
                                         </span>
                                     </div>
                                 </div>
@@ -224,7 +224,7 @@ export default function Index({ stats: initialStats }: { stats: Stats }) {
                                 </div>
                             </div>
                             <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
-                                Primary interface: {stats.networks[0]?.interface || 'N/A'}
+                                Primary interface: {stats?.networks?.[0]?.interface || 'N/A'}
                             </p>
                         </div>
                     </div>
@@ -233,7 +233,7 @@ export default function Index({ stats: initialStats }: { stats: Stats }) {
                     <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
                         <div className="overflow-hidden rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
                             <h3 className="text-lg font-medium text-gray-900 dark:text-white">CPU Usage History</h3>
-                            <div className="mt-6 h-64 w-full">
+                            <div className="mt-6 min-h-64 w-full" style={{ minWidth: '0px', height: '256px' }}>
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={history}>
                                         <defs>
@@ -257,7 +257,7 @@ export default function Index({ stats: initialStats }: { stats: Stats }) {
 
                         <div className="overflow-hidden rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
                             <h3 className="text-lg font-medium text-gray-900 dark:text-white">Memory Usage History</h3>
-                            <div className="mt-6 h-64 w-full">
+                            <div className="mt-6 min-h-64 w-full" style={{ minWidth: '0px', height: '256px' }}>
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={history}>
                                         <defs>
@@ -290,7 +290,7 @@ export default function Index({ stats: initialStats }: { stats: Stats }) {
                         </div>
                         <div className="p-6">
                             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                                {stats.disks.map((disk, index) => (
+                                {(stats?.disks ?? []).map((disk, index) => (
                                     <div key={index} className="rounded-xl border border-gray-100 bg-gray-50/50 p-4 dark:border-gray-700 dark:bg-gray-900/50">
                                         <div className="mb-3 flex items-center justify-between">
                                             <div>
@@ -298,13 +298,13 @@ export default function Index({ stats: initialStats }: { stats: Stats }) {
                                                 <span className="text-xs text-gray-500 dark:text-gray-400">{disk.name}</span>
                                             </div>
                                             <span className="text-sm font-semibold text-indigo-600 dark:text-indigo-400">
-                                                {(( (disk.total - disk.available) / disk.total) * 100).toFixed(1)}%
+                                                {(( (disk.total - disk.available) / (disk.total || 1)) * 100).toFixed(1)}%
                                             </span>
                                         </div>
                                         <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700">
                                             <div
                                                 className="h-2 rounded-full bg-indigo-500"
-                                                style={{ width: `${((disk.total - disk.available) / disk.total) * 100}%` }}
+                                                style={{ width: `${((disk.total - disk.available) / (disk.total || 1)) * 100}%` }}
                                             />
                                         </div>
                                         <div className="mt-3 flex justify-between text-xs text-gray-500 dark:text-gray-400">
@@ -337,7 +337,7 @@ export default function Index({ stats: initialStats }: { stats: Stats }) {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                                    {stats.networks.map((net, index) => (
+                                    {(stats?.networks ?? []).map((net, index) => (
                                         <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-900/50">
                                             <td className="whitespace-nowrap px-6 py-4 font-medium text-gray-900 dark:text-white">
                                                 {net.interface}

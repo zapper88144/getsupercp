@@ -12,11 +12,24 @@ struct DaemonState {
     firewall_active: bool,
 }
 
+async fn user_exists(username: &str) -> Result<bool, Box<dyn std::error::Error>> {
+    let output = std::process::Command::new("id")
+        .arg(username)
+        .output()?;
+    
+    Ok(output.status.success())
+}
+
 async fn create_vhost(params: &Value) -> Result<String, Box<dyn std::error::Error>> {
     let domain = params["domain"].as_str().ok_or("Missing domain")?;
     let user = params["user"].as_str().ok_or("Missing user")?;
     let root = params["root"].as_str().ok_or("Missing root")?;
     let php_version = params["php_version"].as_str().ok_or("Missing php_version")?;
+
+    // Validate that the user exists in /etc/passwd
+    if !user_exists(user).await? {
+        return Err(format!("User '{}' does not exist in the system", user).into());
+    }
 
     // 1. Create directories
     let root_path = Path::new(root);
@@ -535,17 +548,41 @@ async fn delete_dns_zone(params: &Value) -> Result<String, Box<dyn std::error::E
 
 async fn request_ssl_cert(params: &Value) -> Result<String, Box<dyn std::error::Error>> {
     let domain = params["domain"].as_str().ok_or("Missing domain")?;
+    let email = params["email"].as_str().unwrap_or("admin@example.com");
     
-    // Mocking certbot call
-    // In a real system: Command::new("certbot").arg("certonly").arg("--nginx").arg("-d").arg(domain)...
+    // Request certificate via Let's Encrypt using certbot
+    let output = std::process::Command::new("sudo")
+        .arg("-n")
+        .arg("certbot")
+        .arg("certonly")
+        .arg("--non-interactive")
+        .arg("--agree-tos")
+        .arg("--nginx")
+        .arg("-d")
+        .arg(domain)
+        .arg("-m")
+        .arg(email)
+        .arg("--register-unsafely-without-email")
+        .output()?;
     
+    if !output.status.success() {
+        let error = String::from_utf8_lossy(&output.stderr);
+        // If cert already exists, that's fine
+        if !error.contains("Certificate not due for renewal") && !error.contains("Cert already exists") {
+            return Err(format!("Failed to request SSL certificate for {}: {}", domain, error).into());
+        }
+    }
+    
+    // Verify the certificate was created
     let cert_dir = format!("/etc/letsencrypt/live/{}", domain);
-    fs::create_dir_all(&cert_dir)?;
+    let cert_path = format!("{}/fullchain.pem", cert_dir);
+    let key_path = format!("{}/privkey.pem", cert_dir);
     
-    fs::write(format!("{}/fullchain.pem", cert_dir), "-----BEGIN CERTIFICATE-----\nMock Cert\n-----END CERTIFICATE-----")?;
-    fs::write(format!("{}/privkey.pem", cert_dir), "-----BEGIN PRIVATE KEY-----\nMock Key\n-----END PRIVATE KEY-----")?;
+    if !Path::new(&cert_path).exists() || !Path::new(&key_path).exists() {
+        return Err(format!("Certificate files not found after certbot execution for {}", domain).into());
+    }
 
-    Ok(format!("SSL certificate issued for {}", domain))
+    Ok(format!("SSL certificate requested and configured for {} via Let's Encrypt", domain))
 }
 
 async fn update_email_account(params: &Value) -> Result<String, Box<dyn std::error::Error>> {
@@ -781,6 +818,38 @@ async fn get_logs(params: &Value) -> Result<String, Box<dyn std::error::Error>> 
     } else {
         let error = String::from_utf8_lossy(&output.stderr);
         Err(format!("Failed to read logs: {}", error).into())
+    }
+}
+
+async fn get_service_logs(params: &Value) -> Result<String, Box<dyn std::error::Error>> {
+    let service = params["service"].as_str().ok_or("Missing service")?;
+    let lines = params["lines"].as_u64().unwrap_or(50) as usize;
+
+    let log_path = match service {
+        "nginx" => "/var/log/supercp/nginx_error.log",
+        "php8.4-fpm" => "/var/log/supercp/php_error.log",
+        "mysql" => "/var/log/mysql/error.log",
+        "redis-server" => "/var/log/redis/redis-server.log",
+        _ => return Err(format!("Unknown service: {}", service).into()),
+    };
+
+    if !Path::new(log_path).exists() {
+        return Ok(format!("Log file {} not found", log_path));
+    }
+
+    // Use 'tail' command for efficient reading
+    let output = std::process::Command::new("tail")
+        .arg("-n")
+        .arg(lines.to_string())
+        .arg(log_path)
+        .output()?;
+
+    if output.status.success() {
+        let result = String::from_utf8_lossy(&output.stdout).to_string();
+        Ok(if result.is_empty() { "Log is empty".to_string() } else { result })
+    } else {
+        let error = String::from_utf8_lossy(&output.stderr);
+        Err(format!("Failed to read service logs: {}", error).into())
     }
 }
 
@@ -1101,6 +1170,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     },
                     "get_logs" => {
                         match get_logs(&req["params"]).await {
+                            Ok(data) => json!({"jsonrpc": "2.0", "result": data, "id": req["id"]}),
+                            Err(e) => json!({"jsonrpc": "2.0", "error": {"code": -32000, "message": e.to_string()}, "id": req["id"]}),
+                        }
+                    },
+                    "get_service_logs" => {
+                        match get_service_logs(&req["params"]).await {
                             Ok(data) => json!({"jsonrpc": "2.0", "result": data, "id": req["id"]}),
                             Err(e) => json!({"jsonrpc": "2.0", "error": {"code": -32000, "message": e.to_string()}, "id": req["id"]}),
                         }

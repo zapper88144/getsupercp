@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\BackupController;
 use App\Http\Controllers\CronJobController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DatabaseController;
@@ -12,7 +13,6 @@ use App\Http\Controllers\LogController;
 use App\Http\Controllers\MonitoringController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ServiceController;
-use App\Http\Controllers\BackupController;
 use App\Http\Controllers\WebDomainController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
@@ -80,6 +80,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/services', [ServiceController::class, 'index'])->name('services.index');
     Route::get('/services/status', [ServiceController::class, 'status'])->name('services.status');
+    Route::get('/services/logs/{service}', [ServiceController::class, 'getLogs'])->name('services.logs');
     // Using POST for restart as it's an action
     Route::post('/services/restart', [ServiceController::class, 'restart'])->name('services.restart');
 

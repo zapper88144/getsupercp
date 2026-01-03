@@ -18,6 +18,7 @@ class WebDomain extends Model
         'has_ssl',
         'ssl_certificate_path',
         'ssl_key_path',
+        'ssl_expires_at',
     ];
 
     public function user(): \Illuminate\Database\Eloquent\Relations\BelongsTo
@@ -30,6 +31,7 @@ class WebDomain extends Model
         return [
             'is_active' => 'boolean',
             'has_ssl' => 'boolean',
+            'ssl_expires_at' => 'datetime',
         ];
     }
 }

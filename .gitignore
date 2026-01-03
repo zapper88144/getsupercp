@@ -19,6 +19,17 @@
 /storage/*.key
 /storage/pail
 /vendor
+/rust/target/
+**/target/
+*.exe
+*.so
+*.dylib
+*.bin
+super-daemon
+database.sqlite
+.env
+.env.backup
+.env.production
 Homestead.json
 Homestead.yaml
 Thumbs.db

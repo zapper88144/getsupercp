@@ -2,8 +2,6 @@
 
 namespace App\Services;
 
-use Exception;
-
 class RustDaemonClient
 {
     protected string $socketPath;
@@ -19,23 +17,40 @@ class RustDaemonClient
      */
     public function call(string $method, array $params = []): array
     {
-        $request = json_encode([
-            'jsonrpc' => '2.0',
-            'method' => $method,
-            'params' => $params,
-            'id' => uniqid(),
-        ]);
+        try {
+            $request = json_encode([
+                'jsonrpc' => '2.0',
+                'method' => $method,
+                'params' => $params,
+                'id' => uniqid(),
+            ]);
 
-        $fp = stream_socket_client("unix://{$this->socketPath}", $errno, $errstr, 5);
+            $fp = @stream_socket_client("unix://{$this->socketPath}", $errno, $errstr, 5);
 
-        if (! $fp) {
-            throw new Exception("Could not connect to super-daemon: $errstr ($errno)");
+            if (! $fp) {
+                // Return a graceful error response instead of throwing
+                return [
+                    'jsonrpc' => '2.0',
+                    'error' => [
+                        'code' => -32603,
+                        'message' => 'Daemon connection failed: '.$errstr,
+                    ],
+                ];
+            }
+
+            fwrite($fp, $request."\n");
+            $response = fgets($fp);
+            fclose($fp);
+
+            return json_decode($response, true) ?? [];
+        } catch (\Exception $e) {
+            return [
+                'jsonrpc' => '2.0',
+                'error' => [
+                    'code' => -32603,
+                    'message' => 'Daemon error: '.$e->getMessage(),
+                ],
+            ];
         }
-
-        fwrite($fp, $request."\n");
-        $response = fgets($fp);
-        fclose($fp);
-
-        return json_decode($response, true);
     }
 }
