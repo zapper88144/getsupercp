@@ -30,11 +30,11 @@ interface DnsZone {
 }
 
 interface Props {
-    zone: DnsZone;
-    availableTypes: string[];
+    zone?: DnsZone;
+    availableTypes?: string[];
 }
 
-export default function Show({ zone, availableTypes }: Props) {
+export default function Show({ zone = { id: 0, domain: '', dns_records: [] }, availableTypes = [] }: Props) {
     const [searchQuery, setSearchQuery] = useState('');
     const [showAddForm, setShowAddForm] = useState(false);
 
@@ -87,6 +87,9 @@ export default function Show({ zone, availableTypes }: Props) {
     };
 
     const filteredRecords = useMemo(() => {
+        if (!zone || !Array.isArray(zone.dns_records)) {
+            return [];
+        }
         return zone.dns_records.filter(record => 
             record.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
             record.value.toLowerCase().includes(searchQuery.toLowerCase()) ||

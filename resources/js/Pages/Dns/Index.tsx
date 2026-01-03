@@ -20,10 +20,10 @@ interface DnsZone {
 }
 
 interface Props {
-    zones: DnsZone[];
+    zones?: DnsZone[];
 }
 
-export default function Index({ zones }: Props) {
+export default function Index({ zones = [] }: Props) {
     const [searchQuery, setSearchQuery] = useState('');
     const [showCreateForm, setShowCreateForm] = useState(false);
 
@@ -48,6 +48,9 @@ export default function Index({ zones }: Props) {
     };
 
     const filteredZones = useMemo(() => {
+        if (!Array.isArray(zones)) {
+            return [];
+        }
         return zones.filter(zone => 
             zone.domain.toLowerCase().includes(searchQuery.toLowerCase())
         );

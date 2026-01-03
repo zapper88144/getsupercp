@@ -16,6 +16,13 @@ class DnsZone extends Model
         'status',
     ];
 
+    protected function casts(): array
+    {
+        return [
+            'status' => 'string',
+        ];
+    }
+
     public function user()
     {
         return $this->belongsTo(User::class);

@@ -23,10 +23,10 @@ interface EmailAccount {
 }
 
 interface Props {
-    emailAccounts: EmailAccount[];
+    accounts?: EmailAccount[];
 }
 
-export default function Index({ emailAccounts }: Props) {
+export default function Index({ accounts = [] }: Props) {
     const [searchQuery, setSearchQuery] = useState('');
     const [showAddForm, setShowAddForm] = useState(false);
 
@@ -53,18 +53,21 @@ export default function Index({ emailAccounts }: Props) {
     };
 
     const filteredAccounts = useMemo(() => {
-        return emailAccounts.filter(account => 
+        if (!Array.isArray(accounts)) {
+            return [];
+        }
+        return accounts.filter(account => 
             account.email.toLowerCase().includes(searchQuery.toLowerCase())
         );
-    }, [emailAccounts, searchQuery]);
+    }, [accounts, searchQuery]);
 
     const stats = useMemo(() => {
-        const total = emailAccounts.length;
-        const active = emailAccounts.filter(a => a.status === 'active').length;
-        const totalQuota = emailAccounts.reduce((acc, a) => acc + a.quota_mb, 0);
+        const total = accounts.length;
+        const active = accounts.filter(a => a.status === 'active').length;
+        const totalQuota = accounts.reduce((acc, a) => acc + a.quota_mb, 0);
         
         return { total, active, totalQuota };
-    }, [emailAccounts]);
+    }, [accounts]);
 
     return (
         <AuthenticatedLayout

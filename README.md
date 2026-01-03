@@ -1,59 +1,99 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# SuperCP (Get Super Control Panel)
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+SuperCP is a modern, high-performance hosting control panel built with Laravel 12, React 18, and a custom Rust-based system daemon. It provides a comprehensive suite of tools for managing web servers, domains, databases, and more.
 
-## About Laravel
+## Features
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- **Dashboard**: Real-time system metrics and overview.
+- **Web Domains**: Manage Nginx vhosts and SSL certificates.
+- **Databases**: Provision MySQL and PostgreSQL databases.
+- **Firewall**: Manage UFW rules and system security.
+- **Services**: Monitor and control system services (Nginx, PHP-FPM, MySQL, etc.).
+- **FTP Users**: Create and manage FTP accounts.
+- **Cron Jobs**: Schedule and manage system tasks.
+- **DNS Management**: Manage DNS zones and records (BIND).
+- **Email Accounts**: Provision email accounts (Postfix/Dovecot).
+- **File Manager**: Full-featured web-based file browser.
+- **Backups**: Automated web and database backups.
+- **System Logs**: Real-time log viewer for system and application logs.
+- **MCP Server**: Full Model Context Protocol implementation for AI-driven management.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+## Tech Stack
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- **Backend**: Laravel 12.44.0 (PHP 8.4.16)
+- **Frontend**: React 18.3.1, Inertia.js 2.0.18, Tailwind CSS 4.0
+- **System Agent**: Rust daemon (Tokio async runtime)
+- **Database**: SQLite (Metadata), MySQL 8.0 (User Databases)
+- **AI Interface**: laravel/mcp (v0.5.1)
 
-## Learning Laravel
+## Getting Started
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+### Prerequisites
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+- PHP 8.4+
+- Node.js 20+
+- Rust (for building the daemon)
+- MySQL 8.0+
+- Nginx
+- UFW
 
-## Laravel Sponsors
+### Installation
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/super/getsupercp.git
+   cd getsupercp
+   ```
 
-### Premium Partners
+2. Install PHP dependencies:
+   ```bash
+   composer install
+   ```
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+3. Install JS dependencies:
+   ```bash
+   npm install
+   ```
 
-## Contributing
+4. Build the Rust daemon:
+   ```bash
+   cd rust
+   cargo build --release
+   ```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+5. Set up environment:
+   ```bash
+   cp .env.example .env
+   php artisan key:generate
+   ```
 
-## Code of Conduct
+6. Run migrations:
+   ```bash
+   php artisan migrate
+   ```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+7. Start the development server:
+   ```bash
+   npm run dev
+   ```
 
-## Security Vulnerabilities
+## AI Management (MCP)
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+SuperCP includes a built-in MCP server that allows you to manage your server using AI agents. The MCP endpoint is available at `/mcp`.
+
+To use the MCP server, register it in your MCP client (like Claude Desktop or Cursor) using the following configuration:
+
+```json
+{
+  "mcpServers": {
+    "supercp": {
+      "command": "php",
+      "args": ["artisan", "mcp:start", "SuperCP"]
+    }
+  }
+}
+```
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+The SuperCP is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).

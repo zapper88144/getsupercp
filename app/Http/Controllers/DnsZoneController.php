@@ -21,7 +21,9 @@ class DnsZoneController extends Controller
         $this->authorize('viewAny', DnsZone::class);
 
         return Inertia::render('Dns/Index', [
-            'zones' => Auth::user()->dnsZones()->withCount('dnsRecords')->get(),
+            'zones' => Auth::user()->dnsZones()
+                ->withCount('dnsRecords')
+                ->get(),
         ]);
     }
 
