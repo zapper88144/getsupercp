@@ -1,18 +1,23 @@
 <?php
 
 use App\Http\Controllers\BackupController;
+use App\Http\Controllers\BackupScheduleController;
 use App\Http\Controllers\CronJobController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DatabaseController;
 use App\Http\Controllers\DnsZoneController;
 use App\Http\Controllers\EmailAccountController;
+use App\Http\Controllers\EmailServerConfigController;
 use App\Http\Controllers\FileManagerController;
 use App\Http\Controllers\FirewallController;
 use App\Http\Controllers\FtpUserController;
 use App\Http\Controllers\LogController;
+use App\Http\Controllers\MonitoringAlertController;
 use App\Http\Controllers\MonitoringController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SecurityDashboardController;
 use App\Http\Controllers\ServiceController;
+use App\Http\Controllers\SslCertificateController;
 use App\Http\Controllers\WebDomainController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
@@ -98,6 +103,44 @@ Route::middleware('auth')->group(function () {
     Route::post('/firewall/toggle-global', [FirewallController::class, 'toggleGlobal'])->name('firewall.toggle-global');
     Route::delete('/firewall/{rule}', [FirewallController::class, 'destroy'])->name('firewall.destroy');
     Route::post('/firewall/{rule}/toggle', [FirewallController::class, 'toggle'])->name('firewall.toggle');
+
+    // SSL Certificates
+    Route::get('/ssl', [SslCertificateController::class, 'index'])->name('ssl.index');
+    Route::get('/ssl/create', [SslCertificateController::class, 'create'])->name('ssl.create');
+    Route::post('/ssl', [SslCertificateController::class, 'store'])->name('ssl.store');
+    Route::get('/ssl/{certificate}', [SslCertificateController::class, 'show'])->name('ssl.show');
+    Route::post('/ssl/{certificate}/renew', [SslCertificateController::class, 'renew'])->name('ssl.renew');
+    Route::delete('/ssl/{certificate}', [SslCertificateController::class, 'destroy'])->name('ssl.destroy');
+
+    // Backup Schedules
+    Route::get('/backups/schedules', [BackupScheduleController::class, 'index'])->name('backups.schedules');
+    Route::get('/backups/schedules/create', [BackupScheduleController::class, 'create'])->name('backups.schedules.create');
+    Route::post('/backups/schedules', [BackupScheduleController::class, 'store'])->name('backups.schedules.store');
+    Route::get('/backups/schedules/{schedule}/edit', [BackupScheduleController::class, 'edit'])->name('backups.schedules.edit');
+    Route::patch('/backups/schedules/{schedule}', [BackupScheduleController::class, 'update'])->name('backups.schedules.update');
+    Route::post('/backups/schedules/{schedule}/toggle', [BackupScheduleController::class, 'toggle'])->name('backups.schedules.toggle');
+    Route::delete('/backups/schedules/{schedule}', [BackupScheduleController::class, 'destroy'])->name('backups.schedules.destroy');
+
+    // Monitoring Alerts
+    Route::get('/monitoring/alerts', [MonitoringAlertController::class, 'index'])->name('monitoring.alerts');
+    Route::get('/monitoring/alerts/create', [MonitoringAlertController::class, 'create'])->name('monitoring.alerts.create');
+    Route::post('/monitoring/alerts', [MonitoringAlertController::class, 'store'])->name('monitoring.alerts.store');
+    Route::get('/monitoring/alerts/{alert}/edit', [MonitoringAlertController::class, 'edit'])->name('monitoring.alerts.edit');
+    Route::patch('/monitoring/alerts/{alert}', [MonitoringAlertController::class, 'update'])->name('monitoring.alerts.update');
+    Route::post('/monitoring/alerts/{alert}/toggle', [MonitoringAlertController::class, 'toggle'])->name('monitoring.alerts.toggle');
+    Route::delete('/monitoring/alerts/{alert}', [MonitoringAlertController::class, 'destroy'])->name('monitoring.alerts.destroy');
+
+    // Security Dashboard
+    Route::get('/security', [SecurityDashboardController::class, 'index'])->name('security.index');
+    Route::get('/security/audit-logs', [SecurityDashboardController::class, 'auditLogs'])->name('security.audit-logs');
+
+    // Email Server Configuration
+    Route::get('/email', [EmailServerConfigController::class, 'index'])->name('email.config');
+    Route::get('/email/create', [EmailServerConfigController::class, 'create'])->name('email.create');
+    Route::post('/email', [EmailServerConfigController::class, 'store'])->name('email.store');
+    Route::get('/email/edit', [EmailServerConfigController::class, 'edit'])->name('email.edit');
+    Route::patch('/email', [EmailServerConfigController::class, 'update'])->name('email.update');
+    Route::post('/email/test', [EmailServerConfigController::class, 'test'])->name('email.test');
 });
 
 require __DIR__.'/auth.php';

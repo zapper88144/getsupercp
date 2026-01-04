@@ -12,7 +12,7 @@ class WebDomainPolicy
      */
     public function viewAny(User $user): bool
     {
-        return false;
+        return true;
     }
 
     /**
@@ -20,7 +20,7 @@ class WebDomainPolicy
      */
     public function view(User $user, WebDomain $webDomain): bool
     {
-        return false;
+        return $user->id === $webDomain->user_id;
     }
 
     /**

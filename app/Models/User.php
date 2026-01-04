@@ -81,4 +81,34 @@ class User extends Authenticatable
     {
         return $this->hasMany(Backup::class);
     }
+
+    public function sslCertificates(): HasMany
+    {
+        return $this->hasMany(SslCertificate::class);
+    }
+
+    public function backupSchedules(): HasMany
+    {
+        return $this->hasMany(BackupSchedule::class);
+    }
+
+    public function monitoringAlerts(): HasMany
+    {
+        return $this->hasMany(MonitoringAlert::class);
+    }
+
+    public function auditLogs(): HasMany
+    {
+        return $this->hasMany(AuditLog::class);
+    }
+
+    public function twoFactorAuthentication(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(TwoFactorAuthentication::class);
+    }
+
+    public function emailServerConfig(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(EmailServerConfig::class);
+    }
 }
