@@ -27,6 +27,7 @@ class UserManagementTest extends TestCase
      */
     public function test_non_admin_cannot_view_user_index(): void
     {
+        /** @var User $user */
         $user = User::factory()->create();
 
         $response = $this->actingAs($user)->get(route('admin.users.index'));
@@ -89,6 +90,7 @@ class UserManagementTest extends TestCase
      */
     public function test_non_admin_cannot_create_user(): void
     {
+        /** @var User $user */
         $user = User::factory()->create();
 
         $response = $this->actingAs($user)
