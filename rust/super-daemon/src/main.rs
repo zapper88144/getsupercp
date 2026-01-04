@@ -78,17 +78,33 @@ async fn create_vhost(params: &Value) -> Result<String, Box<dyn std::error::Erro
     // 4. Write configs
     let nginx_available = format!("/etc/nginx/sites-available/{}", domain);
     let nginx_enabled = format!("/etc/nginx/sites-enabled/{}", domain);
-    let php_pool = format!("/etc/php/{}/fpm/pool.d/{}.conf", php_version, user);
+    let php_pool_dir = format!("/etc/php/{}/fpm/pool.d", php_version);
+    let php_pool = format!("{}/{}.conf", php_pool_dir, user);
+
+    if !Path::new(&php_pool_dir).exists() {
+        return Err(format!("PHP-FPM pool directory {} does not exist. Is PHP {} installed?", php_pool_dir, php_version).into());
+    }
 
     let temp_nginx = format!("/tmp/nginx_{}.conf", domain);
-    let temp_php = format!("/tmp/php_{}.conf", user);
+    let temp_php = format!("/tmp/php_{}.conf", user.replace(" ", "_"));
 
     fs::write(&temp_nginx, nginx_conf)?;
     fs::write(&temp_php, php_conf)?;
 
-    std::process::Command::new("sudo").arg("-n").arg("mv").arg(&temp_nginx).arg(&nginx_available).status()?;
-    std::process::Command::new("sudo").arg("-n").arg("ln").arg("-sf").arg(&nginx_available).arg(&nginx_enabled).status()?;
-    std::process::Command::new("sudo").arg("-n").arg("mv").arg(&temp_php).arg(&php_pool).status()?;
+    let status = std::process::Command::new("sudo").arg("-n").arg("mv").arg(&temp_nginx).arg(&nginx_available).status()?;
+    if !status.success() {
+        return Err(format!("Failed to move Nginx config to {}. Ensure daemon has sudo access.", nginx_available).into());
+    }
+
+    let status = std::process::Command::new("sudo").arg("-n").arg("ln").arg("-sf").arg(&nginx_available).arg(&nginx_enabled).status()?;
+    if !status.success() {
+        return Err(format!("Failed to enable Nginx config at {}. Ensure daemon has sudo access.", nginx_enabled).into());
+    }
+
+    let status = std::process::Command::new("sudo").arg("-n").arg("mv").arg(&temp_php).arg(&php_pool).status()?;
+    if !status.success() {
+        return Err(format!("Failed to move PHP pool config to {}. Ensure daemon has sudo access.", php_pool).into());
+    }
 
     reload_services().await?;
 
@@ -451,6 +467,57 @@ async fn list_ftp_users() -> Result<Value, Box<dyn std::error::Error>> {
     Ok(json!(users))
 }
 
+async fn get_database_size(params: &Value) -> Result<u64, Box<dyn std::error::Error>> {
+    let name = params["name"].as_str().ok_or("Missing name")?;
+    
+    let sql = format!(
+        "SELECT SUM(data_length + index_length) FROM information_schema.TABLES WHERE table_schema = '{}'",
+        name
+    );
+
+    let output = std::process::Command::new("mysql")
+        .arg("-N")
+        .arg("-s")
+        .arg("-e")
+        .arg(sql)
+        .output()?;
+
+    if output.status.success() {
+        let size_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if size_str == "NULL" || size_str.is_empty() {
+            Ok(0)
+        } else {
+            Ok(size_str.parse::<u64>().unwrap_or(0))
+        }
+    } else {
+        let error = String::from_utf8_lossy(&output.stderr);
+        Err(format!("Failed to get database size: {}", error).into())
+    }
+}
+
+async fn get_directory_size(params: &Value) -> Result<u64, Box<dyn std::error::Error>> {
+    let path_str = params["path"].as_str().ok_or("Missing path")?;
+    let target_path = resolve_safe_path(path_str)?;
+
+    if !target_path.exists() {
+        return Err("Path does not exist".into());
+    }
+
+    let output = std::process::Command::new("du")
+        .arg("-sb")
+        .arg(&target_path)
+        .output()?;
+
+    if output.status.success() {
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let size = stdout.split_whitespace().next().unwrap_or("0").parse::<u64>().unwrap_or(0);
+        Ok(size)
+    } else {
+        let error = String::from_utf8_lossy(&output.stderr);
+        Err(format!("Failed to get directory size: {}", error).into())
+    }
+}
+
 async fn update_cron_jobs(params: &Value) -> Result<String, Box<dyn std::error::Error>> {
     let user = params["user"].as_str().ok_or("Missing user")?;
     let jobs = params["jobs"].as_array().ok_or("Missing jobs")?;
@@ -674,15 +741,24 @@ async fn get_system_stats() -> Result<Value, Box<dyn std::error::Error>> {
     }))
 }
 
+fn resolve_safe_path(path_str: &str) -> Result<std::path::PathBuf, Box<dyn std::error::Error>> {
+    let path = Path::new(path_str);
+    let target_path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        Path::new("/home").join(path_str.trim_start_matches('/'))
+    };
+
+    if !target_path.starts_with("/home") {
+        return Err("Access denied: Path must be within /home".into());
+    }
+
+    Ok(target_path)
+}
+
 async fn list_files(params: &Value) -> Result<Value, Box<dyn std::error::Error>> {
     let path_str = params["path"].as_str().ok_or("Missing path")?;
-    let base_path = Path::new("/home");
-    let target_path = base_path.join(path_str.trim_start_matches('/'));
-
-    // Security check: ensure target_path is within base_path
-    if !target_path.starts_with(base_path) {
-        return Err("Access denied".into());
-    }
+    let target_path = resolve_safe_path(path_str)?;
 
     if !target_path.exists() {
         return Err("Path does not exist".into());
@@ -710,12 +786,7 @@ async fn list_files(params: &Value) -> Result<Value, Box<dyn std::error::Error>>
 
 async fn read_file_content(params: &Value) -> Result<String, Box<dyn std::error::Error>> {
     let path_str = params["path"].as_str().ok_or("Missing path")?;
-    let base_path = Path::new("/home");
-    let target_path = base_path.join(path_str.trim_start_matches('/'));
-
-    if !target_path.starts_with(base_path) {
-        return Err("Access denied".into());
-    }
+    let target_path = resolve_safe_path(path_str)?;
 
     let content = fs::read_to_string(target_path)?;
     Ok(content)
@@ -724,12 +795,7 @@ async fn read_file_content(params: &Value) -> Result<String, Box<dyn std::error:
 async fn write_file_content(params: &Value) -> Result<String, Box<dyn std::error::Error>> {
     let path_str = params["path"].as_str().ok_or("Missing path")?;
     let content = params["content"].as_str().ok_or("Missing content")?;
-    let base_path = Path::new("/home");
-    let target_path = base_path.join(path_str.trim_start_matches('/'));
-
-    if !target_path.starts_with(base_path) {
-        return Err("Access denied".into());
-    }
+    let target_path = resolve_safe_path(path_str)?;
 
     if let Some(parent) = target_path.parent() {
         fs::create_dir_all(parent)?;
@@ -741,12 +807,7 @@ async fn write_file_content(params: &Value) -> Result<String, Box<dyn std::error
 
 async fn delete_file_item(params: &Value) -> Result<String, Box<dyn std::error::Error>> {
     let path_str = params["path"].as_str().ok_or("Missing path")?;
-    let base_path = Path::new("/home");
-    let target_path = base_path.join(path_str.trim_start_matches('/'));
-
-    if !target_path.starts_with(base_path) {
-        return Err("Access denied".into());
-    }
+    let target_path = resolve_safe_path(path_str)?;
 
     if target_path.is_dir() {
         fs::remove_dir_all(target_path)?;
@@ -759,12 +820,7 @@ async fn delete_file_item(params: &Value) -> Result<String, Box<dyn std::error::
 
 async fn create_directory_item(params: &Value) -> Result<String, Box<dyn std::error::Error>> {
     let path_str = params["path"].as_str().ok_or("Missing path")?;
-    let base_path = Path::new("/home");
-    let target_path = base_path.join(path_str.trim_start_matches('/'));
-
-    if !target_path.starts_with(base_path) {
-        return Err("Access denied".into());
-    }
+    let target_path = resolve_safe_path(path_str)?;
 
     fs::create_dir_all(target_path)?;
     Ok("Directory created successfully".to_string())
@@ -773,14 +829,9 @@ async fn create_directory_item(params: &Value) -> Result<String, Box<dyn std::er
 async fn rename_file_item(params: &Value) -> Result<String, Box<dyn std::error::Error>> {
     let from_str = params["from"].as_str().ok_or("Missing from path")?;
     let to_str = params["to"].as_str().ok_or("Missing to path")?;
-    let base_path = Path::new("/home");
     
-    let from_path = base_path.join(from_str.trim_start_matches('/'));
-    let to_path = base_path.join(to_str.trim_start_matches('/'));
-
-    if !from_path.starts_with(base_path) || !to_path.starts_with(base_path) {
-        return Err("Access denied".into());
-    }
+    let from_path = resolve_safe_path(from_str)?;
+    let to_path = resolve_safe_path(to_str)?;
 
     fs::rename(from_path, to_path)?;
     Ok("Item renamed successfully".to_string())
@@ -1081,6 +1132,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "list_ftp_users" => {
                         match list_ftp_users().await {
                             Ok(data) => json!({"jsonrpc": "2.0", "result": data, "id": req["id"]}),
+                            Err(e) => json!({"jsonrpc": "2.0", "error": {"code": -32000, "message": e.to_string()}, "id": req["id"]}),
+                        }
+                    },
+                    "get_database_size" => {
+                        match get_database_size(&req["params"]).await {
+                            Ok(size) => json!({"jsonrpc": "2.0", "result": size, "id": req["id"]}),
+                            Err(e) => json!({"jsonrpc": "2.0", "error": {"code": -32000, "message": e.to_string()}, "id": req["id"]}),
+                        }
+                    },
+                    "get_directory_size" => {
+                        match get_directory_size(&req["params"]).await {
+                            Ok(size) => json!({"jsonrpc": "2.0", "result": size, "id": req["id"]}),
                             Err(e) => json!({"jsonrpc": "2.0", "error": {"code": -32000, "message": e.to_string()}, "id": req["id"]}),
                         }
                     },

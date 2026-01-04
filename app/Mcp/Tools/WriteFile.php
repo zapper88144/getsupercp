@@ -22,8 +22,13 @@ class WriteFile extends Tool
      */
     public function handle(Request $request): Response
     {
-        $path = $request->input('path');
-        $content = $request->input('content');
+        $validated = $request->validate([
+            'path' => 'required|string',
+            'content' => 'required|string',
+        ]);
+
+        $path = $validated['path'];
+        $content = $validated['content'];
 
         $daemon = app(RustDaemonClient::class);
 

@@ -25,24 +25,18 @@ class CreateEmailAccount extends Tool
      */
     public function handle(Request $request): Response
     {
-        $email = $request->input('email');
-        $password = $request->input('password');
-        $quotaMb = $request->input('quota_mb', 1024);
+        $validated = $request->validate([
+            'email' => 'required|email',
+            'password' => 'required|string|min:8',
+            'quota_mb' => 'integer|min:1',
+        ]);
 
-        if (! $email || ! $password) {
-            return Response::text('Error: email and password parameters are required.');
-        }
-
-        if (strlen($password) < 8) {
-            return Response::text('Error: password must be at least 8 characters long.');
-        }
+        $email = $validated['email'];
+        $password = $validated['password'];
+        $quotaMb = $validated['quota_mb'] ?? 1024;
 
         // Extract domain from email
         $parts = explode('@', $email);
-        if (count($parts) !== 2) {
-            return Response::text('Error: invalid email format.');
-        }
-
         [, $domain] = $parts;
 
         // Verify domain exists

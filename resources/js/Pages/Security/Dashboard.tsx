@@ -29,8 +29,13 @@ export default function Dashboard({ metrics }: Props) {
     const failedLoginTrend = metrics.failed_login_attempts_24h > 5 ? 'warning' : 'ok';
     const suspiciousActivityLevel = metrics.suspicious_ips > 3 ? 'critical' : metrics.suspicious_ips > 0 ? 'warning' : 'ok';
 
+    const breadcrumbs = [
+        { title: 'Security' },
+    ];
+
     return (
         <AuthenticatedLayout
+            breadcrumbs={breadcrumbs}
             header={
                 <h2 className="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">
                     Security Dashboard

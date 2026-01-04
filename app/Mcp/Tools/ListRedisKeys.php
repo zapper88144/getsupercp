@@ -22,9 +22,15 @@ class ListRedisKeys extends Tool
      */
     public function handle(Request $request): Response
     {
-        $pattern = $request->input('pattern', '*');
-        $connection = $request->input('connection', 'default');
-        $limit = (int) $request->input('limit', 100);
+        $validated = $request->validate([
+            'pattern' => 'string',
+            'connection' => 'string',
+            'limit' => 'integer|min:1|max:1000',
+        ]);
+
+        $pattern = $validated['pattern'] ?? '*';
+        $connection = $validated['connection'] ?? 'default';
+        $limit = $validated['limit'] ?? 100;
 
         try {
             $service = app(RedisService::class);

@@ -1,6 +1,8 @@
 <?php
 
+use App\Http\Controllers\Admin\LoginActivityController;
 use App\Http\Controllers\Admin\UserController as AdminUserController;
+use App\Http\Controllers\Api\HealthController;
 use App\Http\Controllers\BackupController;
 use App\Http\Controllers\BackupScheduleController;
 use App\Http\Controllers\CronJobController;
@@ -34,9 +36,9 @@ Route::get('/', function () {
     ]);
 });
 
-Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['auth', 'verified', 'two-factor'])->name('dashboard');
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'two-factor'])->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
@@ -67,9 +69,15 @@ Route::middleware('auth')->group(function () {
     Route::post('/dns-zones', [DnsZoneController::class, 'store'])->name('dns-zones.store');
     Route::get('/dns-zones/{dnsZone}', [DnsZoneController::class, 'show'])->name('dns-zones.show');
     Route::put('/dns-zones/{dnsZone}/records', [DnsZoneController::class, 'updateRecords'])->name('dns-zones.update-records');
+    Route::post('/dns-zones/{dnsZone}/purge-cloudflare-cache', [DnsZoneController::class, 'purgeCloudflareCache'])->name('dns-zones.purge-cloudflare-cache');
+    Route::post('/dns-zones/{dnsZone}/toggle-cloudflare-proxy', [DnsZoneController::class, 'toggleCloudflareProxy'])->name('dns-zones.toggle-cloudflare-proxy');
     Route::delete('/dns-zones/{dnsZone}', [DnsZoneController::class, 'destroy'])->name('dns-zones.destroy');
+
     Route::get('/email-accounts', [EmailAccountController::class, 'index'])->name('email-accounts.index');
     Route::post('/email-accounts', [EmailAccountController::class, 'store'])->name('email-accounts.store');
+    Route::get('/email-accounts/{emailAccount}', [EmailAccountController::class, 'show'])->name('email-accounts.show');
+    Route::patch('/email-accounts/{emailAccount}', [EmailAccountController::class, 'patch'])->name('email-accounts.patch');
+    Route::put('/email-accounts/{emailAccount}', [EmailAccountController::class, 'update'])->name('email-accounts.update');
     Route::delete('/email-accounts/{emailAccount}', [EmailAccountController::class, 'destroy'])->name('email-accounts.destroy');
 
     Route::get('/file-manager', [FileManagerController::class, 'index'])->name('file-manager.index');
@@ -99,6 +107,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/monitoring', [MonitoringController::class, 'index'])->name('monitoring.index');
     Route::get('/monitoring/stats', [MonitoringController::class, 'stats'])->name('monitoring.stats');
+    Route::get('/api/health', [HealthController::class, 'index'])->name('api.health');
 
     Route::get('/firewall', [FirewallController::class, 'index'])->name('firewall.index');
     Route::post('/firewall', [FirewallController::class, 'store'])->name('firewall.store');
@@ -170,12 +179,16 @@ Route::middleware('auth')->group(function () {
 
     // Admin User Management Routes
     Route::middleware('admin')->prefix('admin')->name('admin.')->group(function () {
+        Route::post('users/bulk-suspend', [AdminUserController::class, 'bulkSuspend'])->name('users.bulk-suspend');
+        Route::post('users/bulk-unsuspend', [AdminUserController::class, 'bulkUnsuspend'])->name('users.bulk-unsuspend');
+        Route::post('users/bulk-delete', [AdminUserController::class, 'bulkDelete'])->name('users.bulk-delete');
         Route::resource('users', AdminUserController::class);
         Route::post('users/{user}/suspend', [AdminUserController::class, 'suspend'])->name('users.suspend');
         Route::post('users/{user}/unsuspend', [AdminUserController::class, 'unsuspend'])->name('users.unsuspend');
         Route::post('users/{user}/force-logout', [AdminUserController::class, 'forceLogout'])->name('users.forceLogout');
         Route::post('users/{user}/reset-two-factor', [AdminUserController::class, 'resetTwoFactor'])->name('users.resetTwoFactor');
         Route::get('users/stats', [AdminUserController::class, 'stats'])->name('users.stats');
+        Route::get('login-activities', [LoginActivityController::class, 'index'])->name('login-activities.index');
     });
 });
 

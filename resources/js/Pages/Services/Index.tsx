@@ -147,6 +147,7 @@ export default function Index() {
                     </button>
                 </div>
             }
+            breadcrumbs={[{ title: 'System Services' }]}
         >
             <Head title="System Services" />
 

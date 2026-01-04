@@ -4,7 +4,6 @@ namespace App\Policies;
 
 use App\Models\Backup;
 use App\Models\User;
-use Illuminate\Auth\Access\Response;
 
 class BackupPolicy
 {
@@ -13,7 +12,7 @@ class BackupPolicy
      */
     public function viewAny(User $user): bool
     {
-        return false;
+        return true;
     }
 
     /**
@@ -21,7 +20,7 @@ class BackupPolicy
      */
     public function view(User $user, Backup $backup): bool
     {
-        return false;
+        return $user->id === $backup->user_id;
     }
 
     /**
@@ -29,7 +28,7 @@ class BackupPolicy
      */
     public function create(User $user): bool
     {
-        return false;
+        return true;
     }
 
     /**

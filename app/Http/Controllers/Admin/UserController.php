@@ -6,6 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Admin\StoreUserRequest;
 use App\Http\Requests\Admin\UpdateUserRequest;
 use App\Models\User;
+use App\Notifications\Admin\UserCreatedNotification;
+use App\Notifications\Admin\UserSuspendedNotification;
+use App\Notifications\Admin\UserUnsuspendedNotification;
+use App\Traits\LogsActivity;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -14,6 +18,8 @@ use Inertia\Response;
 
 class UserController extends Controller
 {
+    use LogsActivity;
+
     /**
      * Display a listing of the users.
      */
@@ -84,6 +90,14 @@ class UserController extends Controller
             'is_admin' => in_array($request->string('role'), ['super-admin', 'admin']),
         ]);
 
+        $user->notify(new UserCreatedNotification($user));
+
+        $this->logActivity(
+            action: 'user_created',
+            model: $user,
+            description: "Created user account for {$user->email}"
+        );
+
         return redirect()
             ->route('admin.users.show', $user)
             ->with('success', "User '{$user->name}' created successfully");
@@ -138,6 +152,12 @@ class UserController extends Controller
             $user->update(['password' => $request->string('password')]);
         }
 
+        $this->logActivity(
+            action: 'user_updated',
+            model: $user,
+            description: "Updated user account for {$user->email}"
+        );
+
         return redirect()
             ->route('admin.users.show', $user)
             ->with('success', "User '{$user->name}' updated successfully");
@@ -151,7 +171,13 @@ class UserController extends Controller
         $this->authorize('delete', $user);
 
         $name = $user->name;
+        $email = $user->email;
         $user->delete();
+
+        $this->logActivity(
+            action: 'user_deleted',
+            description: "Deleted user account for {$email} ({$name})"
+        );
 
         return redirect()
             ->route('admin.users.index')
@@ -175,6 +201,14 @@ class UserController extends Controller
             'suspended_reason' => $request->string('reason'),
         ]);
 
+        $user->notify(new UserSuspendedNotification($user, $request->string('reason')));
+
+        $this->logActivity(
+            action: 'user_suspended',
+            model: $user,
+            description: "Suspended user account for {$user->email}. Reason: {$request->string('reason')}"
+        );
+
         return redirect()
             ->back()
             ->with('success', "User '{$user->name}' has been suspended");
@@ -193,6 +227,14 @@ class UserController extends Controller
             'suspended_reason' => null,
         ]);
 
+        $user->notify(new UserUnsuspendedNotification($user));
+
+        $this->logActivity(
+            action: 'user_unsuspended',
+            model: $user,
+            description: "Unsuspended user account for {$user->email}"
+        );
+
         return redirect()
             ->back()
             ->with('success', "User '{$user->name}' has been unsuspended");
@@ -210,6 +252,12 @@ class UserController extends Controller
             ->where('user_id', $user->id)
             ->delete();
 
+        $this->logActivity(
+            action: 'user_force_logout',
+            model: $user,
+            description: "Force logged out user {$user->email} from all sessions"
+        );
+
         return redirect()
             ->back()
             ->with('success', "User '{$user->name}' has been logged out of all sessions");
@@ -225,9 +273,120 @@ class UserController extends Controller
         $user->update(['two_factor_enabled' => false]);
         $user->twoFactorAuthentication()?->delete();
 
+        $this->logActivity(
+            action: 'user_reset_2fa',
+            model: $user,
+            description: "Reset two-factor authentication for user {$user->email}"
+        );
+
         return redirect()
             ->back()
             ->with('success', "Two-factor authentication reset for '{$user->name}'");
+    }
+
+    /**
+     * Bulk suspend users.
+     */
+    public function bulkSuspend(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'exists:users,id',
+            'reason' => 'required|string|max:500',
+        ]);
+
+        $ids = $request->input('ids');
+        $reason = $request->string('reason');
+        $count = 0;
+
+        foreach ($ids as $id) {
+            $user = User::find($id);
+            if ($user && auth()->user()->can('suspend', $user)) {
+                $user->update([
+                    'status' => 'suspended',
+                    'suspended_at' => now(),
+                    'suspended_reason' => $reason,
+                ]);
+                $user->notify(new UserSuspendedNotification($user, $reason));
+                $count++;
+            }
+        }
+
+        $this->logActivity(
+            action: 'bulk_user_suspended',
+            description: "Bulk suspended {$count} users. Reason: {$reason}"
+        );
+
+        return redirect()
+            ->back()
+            ->with('success', "Successfully suspended {$count} users");
+    }
+
+    /**
+     * Bulk unsuspend users.
+     */
+    public function bulkUnsuspend(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'exists:users,id',
+        ]);
+
+        $ids = $request->input('ids');
+        $count = 0;
+
+        foreach ($ids as $id) {
+            $user = User::find($id);
+            if ($user && auth()->user()->can('unsuspend', $user)) {
+                $user->update([
+                    'status' => 'active',
+                    'suspended_at' => null,
+                    'suspended_reason' => null,
+                ]);
+                $user->notify(new UserUnsuspendedNotification($user));
+                $count++;
+            }
+        }
+
+        $this->logActivity(
+            action: 'bulk_user_unsuspended',
+            description: "Bulk unsuspended {$count} users"
+        );
+
+        return redirect()
+            ->back()
+            ->with('success', "Successfully unsuspended {$count} users");
+    }
+
+    /**
+     * Bulk delete users.
+     */
+    public function bulkDelete(Request $request): RedirectResponse
+    {
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'exists:users,id',
+        ]);
+
+        $ids = $request->input('ids');
+        $count = 0;
+
+        foreach ($ids as $id) {
+            $user = User::find($id);
+            if ($user && auth()->user()->can('delete', $user)) {
+                $user->delete();
+                $count++;
+            }
+        }
+
+        $this->logActivity(
+            action: 'bulk_user_deleted',
+            description: "Bulk deleted {$count} users"
+        );
+
+        return redirect()
+            ->back()
+            ->with('success', "Successfully deleted {$count} users");
     }
 
     /**

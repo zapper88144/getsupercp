@@ -35,4 +35,10 @@ return [
         ],
     ],
 
+    'cloudflare' => [
+        'api_key' => env('CLOUDFLARE_API_KEY'),
+        'email' => env('CLOUDFLARE_EMAIL'),
+        'api_token' => env('CLOUDFLARE_API_TOKEN'),
+    ],
+
 ];

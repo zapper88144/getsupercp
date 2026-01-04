@@ -22,7 +22,11 @@ class ListFiles extends Tool
      */
     public function handle(Request $request): Response
     {
-        $path = $request->input('path', '/');
+        $validated = $request->validate([
+            'path' => 'nullable|string',
+        ]);
+
+        $path = $validated['path'] ?? '/';
 
         $daemon = app(RustDaemonClient::class);
 

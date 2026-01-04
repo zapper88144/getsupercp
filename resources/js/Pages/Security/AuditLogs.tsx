@@ -28,6 +28,11 @@ export default function AuditLogs({ logs }: Props) {
     const [searchQuery, setSearchQuery] = useState('');
     const [filterAction, setFilterAction] = useState('');
 
+    const breadcrumbs = [
+        { title: 'Security', url: route('security.dashboard') },
+        { title: 'Audit Logs' },
+    ];
+
     const filteredLogs = logs.filter(log => {
         const matchesSearch = 
             log.user_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -58,6 +63,7 @@ export default function AuditLogs({ logs }: Props) {
 
     return (
         <AuthenticatedLayout
+            breadcrumbs={breadcrumbs}
             header={
                 <div className="flex items-center gap-4">
                     <Link href={route('security.index')}>

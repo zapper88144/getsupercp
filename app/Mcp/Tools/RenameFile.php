@@ -22,8 +22,13 @@ class RenameFile extends Tool
      */
     public function handle(Request $request): Response
     {
-        $from = $request->input('from');
-        $to = $request->input('to');
+        $validated = $request->validate([
+            'from' => 'required|string',
+            'to' => 'required|string',
+        ]);
+
+        $from = $validated['from'];
+        $to = $validated['to'];
 
         $daemon = app(RustDaemonClient::class);
 

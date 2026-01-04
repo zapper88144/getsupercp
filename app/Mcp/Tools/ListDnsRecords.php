@@ -22,17 +22,11 @@ class ListDnsRecords extends Tool
      */
     public function handle(Request $request): Response
     {
-        $zoneId = $request->input('zone_id');
+        $validated = $request->validate([
+            'zone_id' => 'required|integer|exists:dns_zones,id',
+        ]);
 
-        if (! $zoneId) {
-            return Response::text('Error: zone_id parameter is required.');
-        }
-
-        $zone = DnsZone::with('dnsRecords')->find($zoneId);
-
-        if (! $zone) {
-            return Response::text('DNS zone not found.');
-        }
+        $zone = DnsZone::with('dnsRecords')->find($validated['zone_id']);
 
         return Response::text(json_encode([
             'zone' => $zone->domain,

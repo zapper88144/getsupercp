@@ -22,8 +22,13 @@ class DeleteRedisKey extends Tool
      */
     public function handle(Request $request): Response
     {
-        $pattern = $request->input('pattern');
-        $connection = $request->input('connection', 'default');
+        $validated = $request->validate([
+            'pattern' => 'required|string',
+            'connection' => 'string',
+        ]);
+
+        $pattern = $validated['pattern'];
+        $connection = $validated['connection'] ?? 'default';
 
         try {
             $service = app(RedisService::class);

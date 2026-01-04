@@ -1,5 +1,5 @@
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, usePoll, Link } from '@inertiajs/react';
+import { Head, usePoll, Link, usePage } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import { 
     XAxis, 
@@ -19,6 +19,7 @@ import {
     ShieldCheckIcon,
     CommandLineIcon,
     ArrowRightIcon,
+    UsersIcon,
 } from '@heroicons/react/24/outline';
 
 interface Stats {
@@ -42,7 +43,20 @@ interface Props {
     counts: {
         domains: number;
         firewall_rules: number;
+        users?: number;
+        suspended_users?: number;
+        expiring_ssl: number;
     };
+    expiring_ssl_domains: Array<{
+        id: number;
+        domain: string;
+        expires_at: string;
+        web_domain?: {
+            id: number;
+            domain: string;
+        };
+    }>;
+    services: Record<string, 'running' | 'stopped' | 'not found'>;
 }
 
 interface HistoryItem {
@@ -51,7 +65,8 @@ interface HistoryItem {
     ram: number;
 }
 
-export default function Dashboard({ stats, counts }: Props) {
+export default function Dashboard({ stats, counts, expiring_ssl_domains, services }: Props) {
+    const { auth } = usePage().props as any;
     usePoll(5000);
     const [history, setHistory] = useState<HistoryItem[]>([]);
 
@@ -87,6 +102,7 @@ export default function Dashboard({ stats, counts }: Props) {
                     Dashboard
                 </h2>
             }
+            breadcrumbs={[{ title: 'Dashboard' }]}
         >
             <Head title="Dashboard" />
 
@@ -243,6 +259,83 @@ export default function Dashboard({ stats, counts }: Props) {
                         </div>
                     </div>
 
+                    {/* SSL Alerts */}
+                    {expiring_ssl_domains.length > 0 && (
+                        <div className="mt-8 overflow-hidden rounded-xl bg-amber-50 p-6 shadow-sm ring-1 ring-amber-200 dark:bg-amber-900/10 dark:ring-amber-900/30">
+                            <div className="flex items-center gap-3">
+                                <div className="rounded-lg bg-amber-100 p-2 dark:bg-amber-900/30">
+                                    <ShieldCheckIcon className="h-6 w-6 text-amber-600 dark:text-amber-400" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-medium text-amber-900 dark:text-amber-100">SSL Certificate Alerts</h3>
+                                    <p className="text-sm text-amber-700 dark:text-amber-300">
+                                        The following domains have certificates expiring soon.
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="mt-6 overflow-x-auto">
+                                <table className="min-w-full divide-y divide-amber-200 dark:divide-amber-900/30">
+                                    <thead>
+                                        <tr>
+                                            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-amber-800 dark:text-amber-200">Domain</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-amber-800 dark:text-amber-200">Expires In</th>
+                                            <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-amber-800 dark:text-amber-200">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-amber-100 dark:divide-amber-900/20">
+                                        {expiring_ssl_domains.map((cert) => {
+                                            const daysLeft = Math.ceil((new Date(cert.expires_at).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                                            return (
+                                                <tr key={cert.id}>
+                                                    <td className="whitespace-nowrap px-4 py-3 text-sm font-medium text-amber-900 dark:text-amber-100">{cert.domain}</td>
+                                                    <td className="whitespace-nowrap px-4 py-3 text-sm text-amber-700 dark:text-amber-300">
+                                                        <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${daysLeft <= 7 ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400'}`}>
+                                                            {daysLeft} days
+                                                        </span>
+                                                    </td>
+                                                    <td className="whitespace-nowrap px-4 py-3 text-sm">
+                                                        <Link
+                                                            href={route('ssl.show', cert.id)}
+                                                            className="font-medium text-amber-600 hover:text-amber-500 dark:text-amber-400 dark:hover:text-amber-300"
+                                                        >
+                                                            Manage
+                                                        </Link>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Service Status Dashboard */}
+                    <div className="mt-8 overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
+                        <div className="border-b border-gray-100 px-6 py-4 dark:border-gray-700 flex items-center justify-between">
+                            <h3 className="text-lg font-medium text-gray-900 dark:text-white">Service Status</h3>
+                            <Link href={route('services.index')} className="text-sm text-indigo-600 hover:text-indigo-500 dark:text-indigo-400">
+                                Manage Services
+                            </Link>
+                        </div>
+                        <div className="p-6">
+                            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+                                {Object.entries(services || {}).map(([name, status]) => (
+                                    <div key={name} className="flex items-center gap-3 p-3 rounded-lg bg-gray-50 dark:bg-gray-900/50 border border-gray-100 dark:border-gray-700">
+                                        <div className={`h-2.5 w-2.5 rounded-full ${status === 'running' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{name}</p>
+                                            <p className="text-[10px] text-gray-500 uppercase tracking-wider">{status}</p>
+                                        </div>
+                                    </div>
+                                ))}
+                                {Object.keys(services || {}).length === 0 && (
+                                    <p className="col-span-full text-center text-sm text-gray-500 py-2">No service status information available.</p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Quick Links & Info */}
                     <div className="mt-8 grid grid-cols-1 gap-6 md:grid-cols-2">
                         <div className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
@@ -267,6 +360,16 @@ export default function Dashboard({ stats, counts }: Props) {
                                         <span className="mt-2 text-sm font-medium text-gray-900 dark:text-white">Firewall</span>
                                         <span className="text-xs text-gray-500">{counts.firewall_rules} rules</span>
                                     </Link>
+                                    {auth.user.is_admin && (
+                                        <Link
+                                            href={route('admin.users.index')}
+                                            className="flex flex-col items-center justify-center rounded-xl border border-gray-100 bg-gray-50 p-4 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900/50 dark:hover:bg-gray-900"
+                                        >
+                                            <UsersIcon className="h-8 w-8 text-blue-500" />
+                                            <span className="mt-2 text-sm font-medium text-gray-900 dark:text-white">Users</span>
+                                            <span className="text-xs text-gray-500">{counts.users} total</span>
+                                        </Link>
+                                    )}
                                     <Link
                                         href={route('services.index')}
                                         className="flex flex-col items-center justify-center rounded-xl border border-gray-100 bg-gray-50 p-4 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900/50 dark:hover:bg-gray-900"
@@ -274,14 +377,6 @@ export default function Dashboard({ stats, counts }: Props) {
                                         <CommandLineIcon className="h-8 w-8 text-purple-500" />
                                         <span className="mt-2 text-sm font-medium text-gray-900 dark:text-white">Services</span>
                                         <span className="text-xs text-gray-500">Manage system</span>
-                                    </Link>
-                                    <Link
-                                        href={route('monitoring.index')}
-                                        className="flex flex-col items-center justify-center rounded-xl border border-gray-100 bg-gray-50 p-4 transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900/50 dark:hover:bg-gray-900"
-                                    >
-                                        <CpuChipIcon className="h-8 w-8 text-blue-500" />
-                                        <span className="mt-2 text-sm font-medium text-gray-900 dark:text-white">Monitoring</span>
-                                        <span className="text-xs text-gray-500">Real-time stats</span>
                                     </Link>
                                 </div>
                             </div>

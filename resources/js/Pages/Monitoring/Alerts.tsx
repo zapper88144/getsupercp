@@ -101,6 +101,10 @@ export default function Alerts({ alerts }: Props) {
                     </PrimaryButton>
                 </div>
             }
+            breadcrumbs={[
+                { title: 'System Monitoring', url: route('monitoring.index') },
+                { title: 'Monitoring Alerts' }
+            ]}
         >
             <Head title="Monitoring Alerts" />
 

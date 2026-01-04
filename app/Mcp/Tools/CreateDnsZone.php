@@ -23,15 +23,11 @@ class CreateDnsZone extends Tool
      */
     public function handle(Request $request): Response
     {
-        $domain = $request->input('domain');
+        $validated = $request->validate([
+            'domain' => 'required|string|unique:dns_zones,domain',
+        ]);
 
-        if (! $domain) {
-            return Response::text('Error: domain parameter is required.');
-        }
-
-        if (DnsZone::where('domain', $domain)->exists()) {
-            return Response::text("DNS zone for {$domain} already exists.");
-        }
+        $domain = $validated['domain'];
 
         $zone = DnsZone::create(['domain' => $domain]);
 

@@ -37,10 +37,7 @@ check_application_running() {
     local status="OK"
     local message="Application is running"
     
-    if ! php artisan tinker --quiet << 'EOF' 2>/dev/null
-echo "OK";
-exit();
-EOF
+    if ! php artisan tinker --execute="echo 'OK';" | grep -q "OK"
     then
         status="CRITICAL"
         message="Application is not responding"
@@ -54,11 +51,7 @@ check_database_connection() {
     local status="OK"
     local message="Database connected"
     
-    if ! php artisan tinker --quiet << 'EOF' 2>/dev/null
-\DB::connection()->getPdo();
-echo "OK";
-exit();
-EOF
+    if ! php artisan tinker --execute="\DB::connection()->getPdo(); echo 'OK';" | grep -q "OK"
     then
         status="CRITICAL"
         message="Cannot connect to database"
@@ -72,11 +65,7 @@ check_cache_system() {
     local status="OK"
     local message="Cache system operational"
     
-    if ! php artisan tinker --quiet << 'EOF' 2>/dev/null
-\Cache::put('health_check', time(), 60);
-echo "OK";
-exit();
-EOF
+    if ! php artisan tinker --execute="\Cache::put('health_check', time(), 60); echo 'OK';" | grep -q "OK"
     then
         status="WARNING"
         message="Cache system may have issues"
@@ -91,11 +80,7 @@ check_queue_system() {
     local message="Queue system ready"
     
     # Check if any jobs are failing
-    local failed_count=$(php artisan tinker --quiet << 'EOF' 2>/dev/null || echo "0"
-echo \DB::table('failed_jobs')->count();
-exit();
-EOF
-)
+    local failed_count=$(php artisan tinker --execute="echo \DB::table('failed_jobs')->count();" | tail -n 1 | tr -d '\r\n' | grep -o '[0-9]\+' || echo "0")
     
     if [ "$failed_count" -gt 10 ]; then
         status="WARNING"
@@ -111,7 +96,10 @@ check_disk_space() {
     local message="Disk space adequate"
     local storage_path="${SCRIPT_DIR}/storage"
     
-    local available=$(df "$storage_path" | awk 'NR==2 {print $4}')
+    local available=$(df -P "$storage_path" | awk 'NR==2 {print $4}')
+    # Ensure available is a number
+    available=$(echo "$available" | tr -d '\r\n' | grep -o '[0-9]\+' | head -n 1 || echo "2000000")
+
     local threshold=$((1024 * 1024)) # 1GB in KB
     
     if [ "$available" -lt "$threshold" ]; then
@@ -142,11 +130,7 @@ check_ssl_certificates() {
     local message="SSL certificates valid"
     
     # Check for expiring certificates
-    local expiring=$(php artisan tinker --quiet << 'EOF' 2>/dev/null || echo "0"
-echo \App\Models\SslCertificate::whereBetween('expires_at', [now(), now()->addDays(30)])->count();
-exit();
-EOF
-)
+    local expiring=$(php artisan tinker --execute="echo \App\Models\SslCertificate::whereBetween('expires_at', [now(), now()->addDays(30)])->count();" | tail -n 1 | tr -d '\r\n' | grep -o '[0-9]\+' || echo "0")
     
     if [ "$expiring" -gt 0 ]; then
         status="WARNING"
@@ -162,11 +146,7 @@ check_backups() {
     local message="Recent backups available"
     
     # Check for backups in last 7 days
-    local recent_backups=$(php artisan tinker --quiet << 'EOF' 2>/dev/null || echo "0"
-echo \App\Models\Backup::where('created_at', '>', now()->subDays(7))->count();
-exit();
-EOF
-)
+    local recent_backups=$(php artisan tinker --execute="echo \App\Models\Backup::where('created_at', '>', now()->subDays(7))->count();" | tail -n 1 | tr -d '\r\n' | grep -o '[0-9]\+' || echo "0")
     
     if [ "$recent_backups" -eq 0 ]; then
         status="WARNING"
@@ -182,11 +162,7 @@ check_security_alerts() {
     local message="No active security alerts"
     
     # Check for unresolved security issues
-    local alerts=$(php artisan tinker --quiet << 'EOF' 2>/dev/null || echo "0"
-echo \App\Models\MonitoringAlert::where('resolved', false)->where('type', 'security')->count();
-exit();
-EOF
-)
+    local alerts=$(php artisan tinker --execute="echo \App\Models\MonitoringAlert::where('resolved', false)->where('type', 'security')->count();" | tail -n 1 | tr -d '\r\n' | grep -o '[0-9]\+' || echo "0")
     
     if [ "$alerts" -gt 0 ]; then
         status="WARNING"

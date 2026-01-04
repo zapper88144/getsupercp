@@ -2,15 +2,18 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\RustDaemonClient;
+use App\Services\SystemService;
+use App\Traits\HandlesDaemonErrors;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class ServiceController extends Controller
 {
+    use HandlesDaemonErrors;
+
     public function __construct(
-        protected RustDaemonClient $client
+        protected SystemService $systemService
     ) {}
 
     public function index(): Response
@@ -20,13 +23,13 @@ class ServiceController extends Controller
 
     public function status()
     {
-        $response = $this->client->call('get_status');
+        try {
+            $response = $this->systemService->getStatus();
 
-        if (isset($response['error'])) {
-            return response()->json(['error' => $response['error']['message']], 500);
+            return response()->json($response);
+        } catch (\Throwable $e) {
+            return $this->handleDaemonError($e, 'Failed to get service status.');
         }
-
-        return response()->json($response['result'] ?? []);
     }
 
     public function restart(Request $request)
@@ -35,40 +38,23 @@ class ServiceController extends Controller
             'service' => 'required|string',
         ]);
 
-        $response = $this->client->call('restart_service', [
-            'service' => $request->input('service'),
-        ]);
+        try {
+            $response = $this->systemService->restartService($request->input('service'));
 
-        if (isset($response['error'])) {
-            return response()->json(['message' => $response['error']['message']], 500);
+            return response()->json(['message' => $response]);
+        } catch (\Throwable $e) {
+            return $this->handleDaemonError($e, 'Failed to restart service.');
         }
-
-        return response()->json(['message' => $response['result']]);
     }
 
     public function getLogs(string $service)
     {
-        // Map service names to log file paths
-        $logMap = [
-            'nginx' => '/var/log/supercp/nginx_error.log',
-            'php8.4-fpm' => '/var/log/supercp/php_error.log',
-            'mysql' => '/var/log/mysql/error.log',
-            'redis-server' => '/var/log/redis/redis-server.log',
-        ];
+        try {
+            $response = $this->systemService->getServiceLogs($service);
 
-        if (! isset($logMap[$service])) {
-            return response()->json(['error' => 'Unknown service'], 400);
+            return response()->json(['content' => $response]);
+        } catch (\Throwable $e) {
+            return $this->handleDaemonError($e, 'Failed to get service logs.');
         }
-
-        $response = $this->client->call('get_service_logs', [
-            'service' => $service,
-            'lines' => 50,
-        ]);
-
-        if (isset($response['error'])) {
-            return response()->json(['error' => $response['error']['message']], 500);
-        }
-
-        return response()->json(['content' => $response['result'] ?? 'No logs found']);
     }
 }

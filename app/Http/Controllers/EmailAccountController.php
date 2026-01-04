@@ -2,71 +2,99 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreEmailAccountRequest;
 use App\Models\EmailAccount;
-use App\Services\RustDaemonClient;
+use App\Services\EmailService;
+use App\Traits\HandlesDaemonErrors;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class EmailAccountController extends Controller
 {
-    public function __construct(protected RustDaemonClient $daemon) {}
+    use HandlesDaemonErrors;
+
+    public function __construct(protected EmailService $emailService) {}
 
     public function index(Request $request): Response
     {
+        $query = $request->user()->emailAccounts()->latest();
+
+        if ($request->has('search')) {
+            $search = $request->get('search');
+            $query->where('email', 'like', "%{$search}%");
+        }
+
+        $allAccounts = $request->user()->emailAccounts;
+
         return Inertia::render('Email/Index', [
-            'accounts' => $request->user()->emailAccounts()->latest()->get(),
-            'domains' => $request->user()->webDomains()->select('domain')->get()->pluck('domain'),
+            'accounts' => $query->paginate(10)->withQueryString(),
+            'filters' => $request->only(['search']),
+            'stats' => [
+                'total' => $allAccounts->count(),
+                'active' => $allAccounts->where('status', 'active')->count(),
+                'totalQuota' => $allAccounts->sum('quota_mb'),
+            ],
         ]);
     }
 
-    public function store(Request $request)
+    public function show(EmailAccount $emailAccount): Response
     {
-        $request->validate([
-            'username' => 'required|string|max:255',
-            'domain' => 'required|string|exists:web_domains,domain',
-            'password' => 'required|string|min:8',
-            'quota_mb' => 'required|integer|min:100|max:10240',
+        $this->authorize('view', $emailAccount);
+
+        return Inertia::render('Email/Show', [
+            'account' => $emailAccount,
         ]);
+    }
 
-        $email = $request->username.'@'.$request->domain;
+    public function store(StoreEmailAccountRequest $request)
+    {
+        $validated = $request->validated();
 
-        if (EmailAccount::where('email', $email)->exists()) {
-            return back()->withErrors(['username' => 'This email address already exists.']);
+        try {
+            $account = $this->emailService->create($request->user(), $validated);
+
+            return redirect()->route('email-accounts.index')
+                ->with('success', 'Email account created successfully.');
+        } catch (\Throwable $e) {
+            return $this->handleDaemonError($e, 'Failed to create email account.', route('email-accounts.index'));
         }
+    }
 
-        $account = $request->user()->emailAccounts()->create([
-            'email' => $email,
-            'password' => Hash::make($request->password),
-            'quota_mb' => $request->quota_mb,
-            'status' => 'active',
+    public function update(Request $request, EmailAccount $emailAccount)
+    {
+        $this->authorize('update', $emailAccount);
+
+        $validated = $request->validate([
+            'password' => 'nullable|string|min:8',
+            'quota_mb' => 'nullable|integer|min:256|max:102400',
         ]);
 
-        $this->syncWithDaemon($account, $request->password);
+        try {
+            $this->emailService->update($emailAccount, $validated);
 
-        return redirect()->route('email-accounts.index');
+            return back()->with('success', 'Email account updated successfully.');
+        } catch (\Throwable $e) {
+            return $this->handleDaemonError($e, 'Failed to update email account.');
+        }
+    }
+
+    public function patch(Request $request, EmailAccount $emailAccount)
+    {
+        return $this->update($request, $emailAccount);
     }
 
     public function destroy(EmailAccount $emailAccount)
     {
         $this->authorize('delete', $emailAccount);
 
-        $this->daemon->call('delete_email_account', [
-            'email' => $emailAccount->email,
-        ]);
+        try {
+            $this->emailService->delete($emailAccount);
 
-        $emailAccount->delete();
-
-        return redirect()->route('email-accounts.index');
-    }
-
-    protected function syncWithDaemon(EmailAccount $account, string $plainPassword)
-    {
-        $this->daemon->call('update_email_account', [
-            'email' => $account->email,
-            'password' => $plainPassword,
-            'quota_mb' => $account->quota_mb,
-        ]);
+            return redirect()->route('email-accounts.index')
+                ->with('success', 'Email account deleted successfully.');
+        } catch (\Throwable $e) {
+            return $this->handleDaemonError($e, 'Failed to delete email account.', route('email-accounts.index'));
+        }
     }
 }

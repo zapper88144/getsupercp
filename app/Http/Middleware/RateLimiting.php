@@ -28,7 +28,7 @@ class RateLimiting
         // Apply different rate limits based on request type
         if ($request->is('api/*')) {
             $this->applyApiRateLimiting($request);
-        } elseif ($request->is('auth/*')) {
+        } elseif ($request->is('login') || $request->is('register') || $request->is('two-factor-*') || $request->is('forgot-password') || $request->is('reset-password')) {
             $this->applyAuthRateLimiting($request);
         } elseif ($request->is('*/download*')) {
             $this->applyDownloadRateLimiting($request);
@@ -46,9 +46,16 @@ class RateLimiting
     private function applyApiRateLimiting(Request $request): void
     {
         $key = 'api:'.$request->ip();
-        RateLimiter::attempt($key, 100, function () {
+        if (! RateLimiter::attempt($key, 100, function () {
             // Allow
-        }, 60);
+        }, 60)) {
+            \App\Models\AuditLog::log(
+                action: 'rate_limit_api',
+                description: 'API rate limit exceeded for IP: '.$request->ip(),
+                result: 'failed'
+            );
+            abort(429, 'Too many API requests. Please try again later.');
+        }
     }
 
     /**
@@ -63,6 +70,11 @@ class RateLimiting
             if (! RateLimiter::attempt($key, 5, function () {
                 // Allow
             }, 60)) {
+                \App\Models\AuditLog::log(
+                    action: 'rate_limit_auth',
+                    description: 'Authentication rate limit exceeded for IP: '.$request->ip().' and email: '.$request->input('email', ''),
+                    result: 'failed'
+                );
                 abort(429, 'Too many authentication attempts. Please try again later.');
             }
         }
@@ -74,11 +86,12 @@ class RateLimiting
      */
     private function applyDownloadRateLimiting(Request $request): void
     {
-        if ($request->user()) {
-            $key = 'download:'.$request->user()->id;
-            RateLimiter::attempt($key, 20, function () {
-                // Allow
-            }, 3600);
+        $key = $request->user() ? 'download:'.$request->user()->id : 'download:'.$request->ip();
+
+        if (! RateLimiter::attempt($key, 20, function () {
+            // Allow
+        }, 3600)) {
+            abort(429, 'Too many download requests. Please try again later.');
         }
     }
 
@@ -89,8 +102,10 @@ class RateLimiting
     private function applyGeneralRateLimiting(Request $request): void
     {
         $key = 'request:'.$request->ip();
-        RateLimiter::attempt($key, 60, function () {
+        if (! RateLimiter::attempt($key, 60, function () {
             // Allow
-        }, 60);
+        }, 60)) {
+            abort(429, 'Too many requests. Please try again later.');
+        }
     }
 }

@@ -40,6 +40,11 @@ export default function Schedules({ schedules }: Props) {
     const [isAdding, setIsAdding] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
 
+    const breadcrumbs = [
+        { title: 'Backups', url: route('backups.index') },
+        { title: 'Schedules', url: route('backups.schedules.index') },
+    ];
+
     const { data, setData, post, patch, delete: destroy, processing, errors, reset } = useForm({
         name: '',
         frequency: 'daily',
@@ -76,6 +81,7 @@ export default function Schedules({ schedules }: Props) {
 
     return (
         <AuthenticatedLayout
+            breadcrumbs={breadcrumbs}
             header={
                 <div className="flex justify-between items-center">
                     <h2 className="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">

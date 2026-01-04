@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\FirewallRule;
-use App\Services\RustDaemonClient;
+use App\Services\FirewallService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -11,13 +11,14 @@ use Inertia\Response;
 class FirewallController extends Controller
 {
     public function __construct(
-        protected RustDaemonClient $daemon
+        private FirewallService $firewallService
     ) {}
 
     public function index(): Response
     {
-        $response = $this->daemon->call('get_firewall_status');
-        $status = $response['result'] ?? ['status' => 'unknown', 'rules' => []];
+        $this->authorize('viewAny', FirewallRule::class);
+
+        $status = $this->firewallService->getStatus();
 
         return Inertia::render('Firewall/Index', [
             'rules' => FirewallRule::latest()->get(),
@@ -27,6 +28,8 @@ class FirewallController extends Controller
 
     public function store(Request $request)
     {
+        $this->authorize('create', FirewallRule::class);
+
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'port' => 'required|integer|min:1|max:65535',
@@ -35,52 +38,39 @@ class FirewallController extends Controller
             'source' => 'required|string',
         ]);
 
-        $rule = FirewallRule::create($validated);
+        try {
+            $this->firewallService->createRule($validated);
 
-        $this->daemon->call('apply_firewall_rule', [
-            'port' => (int) $rule->port,
-            'protocol' => $rule->protocol,
-            'action' => $rule->action,
-            'source' => $rule->source,
-        ]);
-
-        return back()->with('success', 'Firewall rule created and applied.');
+            return back()->with('success', 'Firewall rule created and applied.');
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => $e->getMessage()]);
+        }
     }
 
     public function destroy(FirewallRule $rule)
     {
-        $this->daemon->call('delete_firewall_rule', [
-            'port' => (int) $rule->port,
-            'protocol' => $rule->protocol,
-            'action' => $rule->action,
-        ]);
+        $this->authorize('delete', $rule);
 
-        $rule->delete();
+        try {
+            $this->firewallService->deleteRule($rule);
 
-        return back()->with('success', 'Firewall rule deleted.');
+            return back()->with('success', 'Firewall rule deleted.');
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => $e->getMessage()]);
+        }
     }
 
-    public function toggle(FirewallRule $rule)
+    public function toggle(FirewallRule $rule, Request $request)
     {
-        $rule->is_active = !$rule->is_active;
-        $rule->save();
+        $this->authorize('update', $rule);
 
-        if ($rule->is_active) {
-            $this->daemon->call('apply_firewall_rule', [
-                'port' => (int) $rule->port,
-                'protocol' => $rule->protocol,
-                'action' => $rule->action,
-                'source' => $rule->source,
-            ]);
-        } else {
-            $this->daemon->call('delete_firewall_rule', [
-                'port' => (int) $rule->port,
-                'protocol' => $rule->protocol,
-                'action' => $rule->action,
-            ]);
+        try {
+            $this->firewallService->toggleRule($rule);
+
+            return back()->with('success', 'Firewall rule status updated.');
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => $e->getMessage()]);
         }
-
-        return back()->with('success', 'Firewall rule status updated.');
     }
 
     public function toggleGlobal(Request $request)
@@ -89,10 +79,16 @@ class FirewallController extends Controller
             'enable' => 'required|boolean',
         ]);
 
-        $this->daemon->call('toggle_firewall', [
-            'enable' => $validated['enable'],
-        ]);
+        try {
+            if ($validated['enable']) {
+                $this->firewallService->enable();
+            } else {
+                $this->firewallService->disable();
+            }
 
-        return back()->with('success', 'Firewall ' . ($validated['enable'] ? 'enabled' : 'disabled') . '.');
+            return back()->with('success', 'Firewall '.($validated['enable'] ? 'enabled' : 'disabled').'.');
+        } catch (\Exception $e) {
+            return back()->withErrors(['error' => $e->getMessage()]);
+        }
     }
 }

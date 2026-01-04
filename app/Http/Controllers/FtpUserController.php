@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\FtpUser;
-use App\Services\RustDaemonClient;
+use App\Traits\HandlesDaemonErrors;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -11,8 +11,10 @@ use Inertia\Response;
 
 class FtpUserController extends Controller
 {
+    use HandlesDaemonErrors;
+
     public function __construct(
-        protected RustDaemonClient $daemon
+        protected \App\Services\FtpService $ftpService
     ) {}
 
     /**
@@ -20,8 +22,16 @@ class FtpUserController extends Controller
      */
     public function index(Request $request): Response
     {
+        $query = $request->user()->ftpUsers();
+
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where('username', 'like', "%{$search}%");
+        }
+
         return Inertia::render('FtpUsers/Index', [
-            'ftpUsers' => $request->user()->ftpUsers()->latest()->get(),
+            'ftpUsers' => $query->latest()->paginate(10)->withQueryString(),
+            'filters' => $request->only(['search']),
         ]);
     }
 
@@ -44,14 +54,15 @@ class FtpUserController extends Controller
             'homedir' => ['required', 'string', 'max:255'],
         ]);
 
-        $ftpUser = $request->user()->ftpUsers()->create($validated);
-
-        // Sync with daemon
-        $this->daemon->call('create_ftp_user', [
-            'username' => $ftpUser->username,
-            'password' => $request->password, // Raw password for daemon
-            'homedir' => $ftpUser->homedir,
-        ]);
+        try {
+            $this->ftpService->create($request->user(), [
+                'username' => $validated['username'],
+                'password' => $validated['password'],
+                'home_dir' => $validated['homedir'],
+            ]);
+        } catch (\Throwable $e) {
+            return $this->handleDaemonError($e, 'Failed to create FTP user on the system.', route('ftp-users.index'));
+        }
 
         return redirect()->route('ftp-users.index');
     }
@@ -63,12 +74,11 @@ class FtpUserController extends Controller
     {
         $this->authorize('delete', $ftpUser);
 
-        // Sync with daemon
-        $this->daemon->call('delete_ftp_user', [
-            'username' => $ftpUser->username,
-        ]);
-
-        $ftpUser->delete();
+        try {
+            $this->ftpService->delete($ftpUser);
+        } catch (\Throwable $e) {
+            return $this->handleDaemonError($e, 'Failed to delete FTP user from the system.', route('ftp-users.index'));
+        }
 
         return redirect()->route('ftp-users.index');
     }

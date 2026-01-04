@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Auth;
 
 class AuditLog extends Model
 {
@@ -47,5 +48,18 @@ class AuditLog extends Model
     public function scopeByUser($query, int $userId)
     {
         return $query->where('user_id', $userId);
+    }
+
+    public static function log(string $action, ?string $description = null, string $result = 'success', array $changes = [], ?User $user = null): self
+    {
+        return self::create([
+            'user_id' => $user?->getKey() ?? Auth::id(),
+            'action' => $action,
+            'description' => $description,
+            'ip_address' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'changes' => $changes,
+            'result' => $result,
+        ]);
     }
 }

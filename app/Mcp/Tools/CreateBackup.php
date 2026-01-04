@@ -25,16 +25,13 @@ class CreateBackup extends Tool
      */
     public function handle(Request $request): Response
     {
-        $backupType = $request->input('type');
-        $source = $request->input('source');
+        $validated = $request->validate([
+            'type' => 'required|in:web,database',
+            'source' => 'required|string',
+        ]);
 
-        if (! $backupType || ! $source) {
-            return Response::text('Error: type and source parameters are required.');
-        }
-
-        if (! in_array($backupType, ['web', 'database'])) {
-            return Response::text('Error: type must be either "web" or "database".');
-        }
+        $backupType = $validated['type'];
+        $source = $validated['source'];
 
         // Verify source exists
         if ($backupType === 'web') {

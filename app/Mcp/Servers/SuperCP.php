@@ -33,6 +33,8 @@ class SuperCP extends Server
      */
     protected array $tools = [
         \App\Mcp\Tools\ListUsers::class,
+        \App\Mcp\Tools\ListAuditLogs::class,
+        \App\Mcp\Tools\ListNotifications::class,
         \App\Mcp\Tools\GetSystemStats::class,
         \App\Mcp\Tools\ListDomains::class,
         \App\Mcp\Tools\CreateDomain::class,

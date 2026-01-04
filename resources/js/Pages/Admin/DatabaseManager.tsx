@@ -21,8 +21,12 @@ export default function DatabaseManager({ databases, stats }: Props) {
     const totalTables = databases.reduce((sum, db) => sum + db.tables, 0);
     const totalRows = databases.reduce((sum, db) => sum + db.rows, 0);
 
+    const breadcrumbs = [
+        { title: 'Database Manager' },
+    ];
+
     return (
-        <AuthenticatedLayout>
+        <AuthenticatedLayout breadcrumbs={breadcrumbs}>
             <Head title="Database Manager" />
 
             <div className="space-y-6">

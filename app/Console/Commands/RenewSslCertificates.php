@@ -3,8 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Models\WebDomain;
+use App\Services\RustDaemonClient;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Process;
 
 class RenewSslCertificates extends Command
 {
@@ -27,7 +27,7 @@ class RenewSslCertificates extends Command
     /**
      * Execute the console command.
      */
-    public function handle(): int
+    public function handle(RustDaemonClient $daemon): int
     {
         $this->info('Starting SSL certificate renewal process...');
 
@@ -51,7 +51,7 @@ class RenewSslCertificates extends Command
 
         foreach ($domains as $webDomain) {
             if ($this->shouldRenew($webDomain)) {
-                if ($this->renewCertificate($webDomain)) {
+                if ($this->renewCertificate($webDomain, $daemon)) {
                     $renewed++;
                     $this->info("✅ Renewed certificate for {$webDomain->domain}");
                 } else {
@@ -86,7 +86,7 @@ class RenewSslCertificates extends Command
         }
 
         // Renew if expiring within 30 days
-        $expiresIn = now()->diffInDays($webDomain->ssl_expires_at);
+        $expiresIn = now()->diffInDays($webDomain->ssl_expires_at, false);
 
         return $expiresIn <= 30;
     }
@@ -94,21 +94,35 @@ class RenewSslCertificates extends Command
     /**
      * Attempt to renew a certificate for a domain.
      */
-    protected function renewCertificate(WebDomain $webDomain): bool
+    protected function renewCertificate(WebDomain $webDomain, RustDaemonClient $daemon): bool
     {
         try {
-            // Use certbot directly to renew the certificate
-            $result = Process::run("certbot renew --cert-name {$webDomain->domain} --non-interactive --agree-tos --no-eff-email 2>&1");
+            // Use the daemon to request/renew the certificate
+            $daemon->requestSslCert($webDomain->domain, $webDomain->user->email ?? 'admin@example.com');
 
-            if ($result->exitCode() !== 0) {
-                $this->warn("Certbot output: {$result->output()}");
+            // The daemon handles certbot and nginx reload.
+            // Now we just need to update the expiration date in our database.
 
-                return false;
+            // Path to the certificate (usually in /etc/letsencrypt/live/domain/fullchain.pem)
+            $certPath = "/etc/letsencrypt/live/{$webDomain->domain}/fullchain.pem";
+
+            // Since the web server might not have read access to /etc/letsencrypt,
+            // we can ask the daemon to read the cert info or just use openssl if we have access.
+            // For now, let's try to read it via the daemon's readFile method if direct access fails.
+
+            $certContent = null;
+            if (file_exists($certPath)) {
+                $certContent = file_get_contents($certPath);
+            } else {
+                try {
+                    $certContent = $daemon->readFile($certPath);
+                } catch (\Exception $e) {
+                    $this->warn("Could not read certificate file via daemon: {$e->getMessage()}");
+                }
             }
 
-            // Read the certificate to extract expiration date
-            if (file_exists($webDomain->ssl_certificate_path)) {
-                $certData = openssl_x509_parse(file_get_contents($webDomain->ssl_certificate_path));
+            if ($certContent) {
+                $certData = openssl_x509_parse($certContent);
                 if ($certData && isset($certData['validTo_time_t'])) {
                     $webDomain->update([
                         'ssl_expires_at' => \Carbon\Carbon::createFromTimestamp($certData['validTo_time_t']),
@@ -116,12 +130,9 @@ class RenewSslCertificates extends Command
                 }
             }
 
-            // Reload nginx to apply new certificate
-            Process::run('systemctl reload nginx 2>&1');
-
             return true;
         } catch (\Exception $e) {
-            $this->error("Exception during renewal: {$e->getMessage()}");
+            $this->error("Exception during renewal for {$webDomain->domain}: {$e->getMessage()}");
 
             return false;
         }

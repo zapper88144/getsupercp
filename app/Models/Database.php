@@ -17,6 +17,7 @@ class Database extends Model
         'db_user',
         'db_password',
         'type',
+        'size_bytes',
     ];
 
     protected $hidden = [

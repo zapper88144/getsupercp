@@ -3,7 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\CronJob;
-use App\Services\RustDaemonClient;
+use App\Services\CronService;
+use App\Traits\HandlesDaemonErrors;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -11,8 +12,10 @@ use Inertia\Response;
 
 class CronJobController extends Controller
 {
+    use HandlesDaemonErrors;
+
     public function __construct(
-        protected RustDaemonClient $daemon
+        protected CronService $cronService
     ) {}
 
     /**
@@ -20,8 +23,20 @@ class CronJobController extends Controller
      */
     public function index(Request $request): Response
     {
+        $query = $request->user()->cronJobs()->latest();
+
+        if ($request->has('search')) {
+            $search = $request->get('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('command', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%")
+                    ->orWhere('schedule', 'like', "%{$search}%");
+            });
+        }
+
         return Inertia::render('CronJobs/Index', [
-            'cronJobs' => $request->user()->cronJobs()->latest()->get(),
+            'cronJobs' => $query->paginate(10)->withQueryString(),
+            'filters' => $request->only(['search']),
         ]);
     }
 
@@ -32,17 +47,11 @@ class CronJobController extends Controller
     {
         $validated = $request->validate([
             'command' => ['required', 'string', 'max:255'],
-            'schedule' => ['required', 'string', 'max:100'], // Basic validation, could be improved
+            'schedule' => ['required', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $cronJob = $request->user()->cronJobs()->create($validated);
-
-        // Sync with daemon
-        $this->daemon->call('update_cron_jobs', [
-            'user' => $request->user()->name,
-            'jobs' => $request->user()->cronJobs()->where('is_active', true)->get(['command', 'schedule'])->toArray(),
-        ]);
+        $this->cronService->create($request->user(), $validated);
 
         return redirect()->route('cron-jobs.index');
     }
@@ -58,13 +67,7 @@ class CronJobController extends Controller
             'is_active' => ['required', 'boolean'],
         ]);
 
-        $cronJob->update($validated);
-
-        // Sync with daemon
-        $this->daemon->call('update_cron_jobs', [
-            'user' => $request->user()->name,
-            'jobs' => $request->user()->cronJobs()->where('is_active', true)->get(['command', 'schedule'])->toArray(),
-        ]);
+        $this->cronService->update($cronJob, $validated);
 
         return redirect()->route('cron-jobs.index');
     }
@@ -76,14 +79,7 @@ class CronJobController extends Controller
     {
         $this->authorize('delete', $cronJob);
 
-        $user = $cronJob->user;
-        $cronJob->delete();
-
-        // Sync with daemon
-        $this->daemon->call('update_cron_jobs', [
-            'user' => $user->name,
-            'jobs' => $user->cronJobs()->where('is_active', true)->get(['command', 'schedule'])->toArray(),
-        ]);
+        $this->cronService->delete($cronJob);
 
         return redirect()->route('cron-jobs.index');
     }

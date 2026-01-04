@@ -2,30 +2,43 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\RustDaemonClient;
-use Illuminate\Http\Request;
+use App\Services\MonitoringService;
+use App\Traits\HandlesDaemonErrors;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class MonitoringController extends Controller
 {
+    use HandlesDaemonErrors;
+
     public function __construct(
-        protected RustDaemonClient $daemon
+        protected MonitoringService $monitoringService
     ) {}
 
     public function index(): Response
     {
-        $stats = $this->daemon->call('get_system_stats');
+        try {
+            $stats = $this->monitoringService->getSystemStats();
 
-        return Inertia::render('Monitoring/Index', [
-            'stats' => $stats['result'] ?? [],
-        ]);
+            return Inertia::render('Monitoring/Index', [
+                'stats' => $stats,
+            ]);
+        } catch (\Throwable $e) {
+            // For monitoring, we might want to still render the page but with empty stats
+            // and a warning message.
+            return Inertia::render('Monitoring/Index', [
+                'stats' => [],
+                'error' => 'Failed to retrieve system stats: '.$e->getMessage(),
+            ]);
+        }
     }
 
     public function stats(): array
     {
-        $stats = $this->daemon->call('get_system_stats');
-
-        return $stats['result'] ?? [];
+        try {
+            return $this->monitoringService->getSystemStats();
+        } catch (\Throwable $e) {
+            return [];
+        }
     }
 }

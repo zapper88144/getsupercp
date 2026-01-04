@@ -1,10 +1,11 @@
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, Link } from '@inertiajs/react';
-import PrimaryButton from '@/Components/PrimaryButton';
-import DangerButton from '@/Components/DangerButton';
-import SecondaryButton from '@/Components/SecondaryButton';
-import { useState } from 'react';
-import { 
+import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
+import { Head, Link } from "@inertiajs/react";
+import PrimaryButton from "@/Components/PrimaryButton";
+import DangerButton from "@/Components/DangerButton";
+import SecondaryButton from "@/Components/SecondaryButton";
+import Pagination from "@/Components/Pagination";
+import { useState, useEffect } from "react";
+import {
     ShieldCheckIcon,
     ShieldExclamationIcon,
     ClockIcon,
@@ -16,9 +17,9 @@ import {
     PlusIcon,
     MagnifyingGlassIcon,
     EyeIcon,
-    XMarkIcon
-} from '@heroicons/react/24/outline';
-import { router } from '@inertiajs/react';
+    XMarkIcon,
+} from "@heroicons/react/24/outline";
+import { router } from "@inertiajs/react";
 
 interface Certificate {
     id: number;
@@ -28,7 +29,7 @@ interface Certificate {
     issued_at: string | null;
     expires_at: string | null;
     auto_renewal_enabled: boolean;
-    status: 'pending' | 'active' | 'expired' | 'failed';
+    status: "pending" | "active" | "expired" | "failed";
     webDomain: {
         id: number;
         domain: string;
@@ -36,37 +37,69 @@ interface Certificate {
 }
 
 interface Props {
-    certificates: Certificate[];
+    certificates: {
+        data: Certificate[];
+        links: any[];
+        current_page: number;
+        last_page: number;
+        total: number;
+    };
+    filters: {
+        search?: string;
+    };
 }
 
-export default function Index({ certificates }: Props) {
-    const [searchQuery, setSearchQuery] = useState('');
+export default function Index({ certificates, filters }: Props) {
+    const [searchQuery, setSearchQuery] = useState(filters.search || "");
+
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (searchQuery !== (filters.search || "")) {
+                router.get(
+                    route("ssl.index"),
+                    { search: searchQuery },
+                    { preserveState: true, replace: true }
+                );
+            }
+        }, 300);
+
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
 
     const getStatusIcon = (status: string) => {
         switch (status) {
-            case 'active':
-                return <CheckCircleIcon className="w-5 h-5 text-green-600 dark:text-green-400" />;
-            case 'expired':
-                return <ExclamationTriangleIcon className="w-5 h-5 text-red-600 dark:text-red-400" />;
-            case 'failed':
-                return <XCircleIcon className="w-5 h-5 text-red-600 dark:text-red-400" />;
-            case 'pending':
-                return <ClockIcon className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />;
+            case "active":
+                return (
+                    <CheckCircleIcon className="w-5 h-5 text-green-600 dark:text-green-400" />
+                );
+            case "expired":
+                return (
+                    <ExclamationTriangleIcon className="w-5 h-5 text-red-600 dark:text-red-400" />
+                );
+            case "failed":
+                return (
+                    <XCircleIcon className="w-5 h-5 text-red-600 dark:text-red-400" />
+                );
+            case "pending":
+                return (
+                    <ClockIcon className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+                );
             default:
                 return null;
         }
     };
 
     const getStatusBadgeClass = (status: string) => {
-        const baseClass = 'px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2';
+        const baseClass =
+            "px-3 py-1 rounded-full text-sm font-medium flex items-center gap-2";
         switch (status) {
-            case 'active':
+            case "active":
                 return `${baseClass} bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200`;
-            case 'expired':
+            case "expired":
                 return `${baseClass} bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200`;
-            case 'failed':
+            case "failed":
                 return `${baseClass} bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200`;
-            case 'pending':
+            case "pending":
                 return `${baseClass} bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200`;
             default:
                 return baseClass;
@@ -74,21 +107,20 @@ export default function Index({ certificates }: Props) {
     };
 
     const handleRenew = (id: number) => {
-        if (confirm('Renew this SSL certificate?')) {
-            router.post(route('ssl.renew', id));
+        if (confirm("Renew this SSL certificate?")) {
+            router.post(route("ssl.renew", id));
         }
     };
 
     const handleDelete = (id: number) => {
-        if (confirm('Are you sure you want to delete this certificate? This action cannot be undone.')) {
-            router.delete(route('ssl.destroy', id));
+        if (
+            confirm(
+                "Are you sure you want to delete this certificate? This action cannot be undone."
+            )
+        ) {
+            router.delete(route("ssl.destroy", id));
         }
     };
-
-    const filteredCertificates = certificates.filter(cert =>
-        cert.domain.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        cert.webDomain.domain.toLowerCase().includes(searchQuery.toLowerCase())
-    );
 
     return (
         <AuthenticatedLayout
@@ -97,7 +129,7 @@ export default function Index({ certificates }: Props) {
                     <h2 className="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">
                         SSL Certificates
                     </h2>
-                    <Link href={route('ssl.create')}>
+                    <Link href={route("ssl.create")}>
                         <PrimaryButton className="flex items-center gap-2">
                             <PlusIcon className="w-5 h-5" />
                             New Certificate
@@ -105,6 +137,7 @@ export default function Index({ certificates }: Props) {
                     </Link>
                 </div>
             }
+            breadcrumbs={[{ title: "SSL Certificates" }]}
         >
             <Head title="SSL Certificates" />
 
@@ -125,9 +158,9 @@ export default function Index({ certificates }: Props) {
                     </div>
 
                     {/* Certificates List */}
-                    {filteredCertificates.length > 0 ? (
+                    {certificates.data.length > 0 ? (
                         <div className="space-y-4">
-                            {filteredCertificates.map((cert) => (
+                            {certificates.data.map((cert) => (
                                 <div
                                     key={cert.id}
                                     className="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg p-6"
@@ -142,29 +175,51 @@ export default function Index({ certificates }: Props) {
                                                 Domain: {cert.webDomain.domain}
                                             </p>
                                             <p className="text-sm text-gray-600 dark:text-gray-400">
-                                                Provider: <span className="capitalize">{cert.provider}</span>
+                                                Provider:{" "}
+                                                <span className="capitalize">
+                                                    {cert.provider}
+                                                </span>
                                             </p>
                                             <p className="text-sm text-gray-600 dark:text-gray-400">
-                                                Validation: <span className="capitalize">{cert.validation_method.replace('-', ' ')}</span>
+                                                Validation:{" "}
+                                                <span className="capitalize">
+                                                    {cert.validation_method.replace(
+                                                        "-",
+                                                        " "
+                                                    )}
+                                                </span>
                                             </p>
                                         </div>
 
                                         {/* Status and Dates */}
                                         <div className="space-y-2">
                                             <div>
-                                                <span className={getStatusBadgeClass(cert.status)}>
+                                                <span
+                                                    className={getStatusBadgeClass(
+                                                        cert.status
+                                                    )}
+                                                >
                                                     {getStatusIcon(cert.status)}
-                                                    {cert.status.charAt(0).toUpperCase() + cert.status.slice(1)}
+                                                    {cert.status
+                                                        .charAt(0)
+                                                        .toUpperCase() +
+                                                        cert.status.slice(1)}
                                                 </span>
                                             </div>
                                             {cert.issued_at && (
                                                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                                                    Issued: {new Date(cert.issued_at).toLocaleDateString()}
+                                                    Issued:{" "}
+                                                    {new Date(
+                                                        cert.issued_at
+                                                    ).toLocaleDateString()}
                                                 </p>
                                             )}
                                             {cert.expires_at && (
                                                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                                                    Expires: {new Date(cert.expires_at).toLocaleDateString()}
+                                                    Expires:{" "}
+                                                    {new Date(
+                                                        cert.expires_at
+                                                    ).toLocaleDateString()}
                                                 </p>
                                             )}
                                             {cert.auto_renewal_enabled && (
@@ -177,40 +232,66 @@ export default function Index({ certificates }: Props) {
 
                                         {/* Actions */}
                                         <div className="flex gap-2 justify-end md:flex-col md:items-end">
-                                            <Link href={route('ssl.show', cert.id)}>
+                                            <Link
+                                                href={route(
+                                                    "ssl.show",
+                                                    cert.id
+                                                )}
+                                            >
                                                 <SecondaryButton className="flex items-center gap-2">
                                                     <EyeIcon className="w-4 h-4" />
-                                                    <span className="hidden md:inline">View</span>
+                                                    <span className="hidden md:inline">
+                                                        View
+                                                    </span>
                                                 </SecondaryButton>
                                             </Link>
+                                            {cert.provider ===
+                                                "letsencrypt" && (
+                                                <button
+                                                    onClick={() =>
+                                                        handleRenew(cert.id)
+                                                    }
+                                                    className="inline-flex items-center gap-2 justify-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition"
+                                                >
+                                                    <ArrowPathIcon className="w-4 h-4" />
+                                                    <span className="hidden md:inline">
+                                                        Renew
+                                                    </span>
+                                                </button>
+                                            )}
                                             <button
-                                                onClick={() => handleRenew(cert.id)}
-                                                className="inline-flex items-center gap-2 justify-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition"
-                                            >
-                                                <ArrowPathIcon className="w-4 h-4" />
-                                                <span className="hidden md:inline">Renew</span>
-                                            </button>
-                                            <button
-                                                onClick={() => handleDelete(cert.id)}
+                                                onClick={() =>
+                                                    handleDelete(cert.id)
+                                                }
                                                 className="inline-flex items-center gap-2 justify-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-md transition"
                                             >
                                                 <TrashIcon className="w-4 h-4" />
-                                                <span className="hidden md:inline">Delete</span>
+                                                <span className="hidden md:inline">
+                                                    Delete
+                                                </span>
                                             </button>
                                         </div>
                                     </div>
                                 </div>
                             ))}
+
+                            <div className="mt-6">
+                                <Pagination links={certificates.links} />
+                            </div>
                         </div>
                     ) : (
                         <div className="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg p-12 text-center">
                             <ShieldCheckIcon className="w-16 h-16 mx-auto text-gray-400 mb-4" />
                             <p className="text-gray-600 dark:text-gray-400 mb-6">
-                                {searchQuery ? 'No certificates match your search.' : 'No SSL certificates yet.'}
+                                {searchQuery
+                                    ? "No certificates match your search."
+                                    : "No SSL certificates yet."}
                             </p>
                             {!searchQuery && (
-                                <Link href={route('ssl.create')}>
-                                    <PrimaryButton>Create Your First Certificate</PrimaryButton>
+                                <Link href={route("ssl.create")}>
+                                    <PrimaryButton>
+                                        Create Your First Certificate
+                                    </PrimaryButton>
                                 </Link>
                             )}
                         </div>

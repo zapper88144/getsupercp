@@ -24,17 +24,11 @@ class RestoreBackup extends Tool
      */
     public function handle(Request $request): Response
     {
-        $backupId = $request->input('backup_id');
+        $validated = $request->validate([
+            'backup_id' => 'required|integer|exists:backups,id',
+        ]);
 
-        if (! $backupId) {
-            return Response::text('Error: backup_id parameter is required.');
-        }
-
-        $backup = Backup::find($backupId);
-
-        if (! $backup) {
-            return Response::text('Backup not found.');
-        }
+        $backup = Backup::findOrFail($validated['backup_id']);
 
         if ($backup->status !== 'completed') {
             return Response::text("Cannot restore a backup that is in status: {$backup->status}.");

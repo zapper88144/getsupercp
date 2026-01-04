@@ -34,18 +34,32 @@ class SecurityHeaders
         $response->header('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
 
         // Content Security Policy - Strict by default
-        $csp = implode('; ', [
+        $scriptSrc = "script-src 'self' 'unsafe-inline' 'unsafe-eval' cdn.jsdelivr.net";
+        $connectSrc = "connect-src 'self' https:";
+
+        // Allow Vite dev server in local environment
+        if (app()->environment('local')) {
+            $scriptSrc .= ' http://127.0.0.1:4000 http://localhost:4000';
+            $connectSrc .= ' http://127.0.0.1:4000 http://localhost:4000 ws://127.0.0.1:4000 ws://localhost:4000';
+        }
+
+        $cspList = [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline' 'unsafe-eval' cdn.jsdelivr.net", // React/Vite need unsafe-inline/eval
+            $scriptSrc,
             "style-src 'self' 'unsafe-inline' cdn.jsdelivr.net fonts.bunny.net",
             "img-src 'self' data: https:",
             "font-src 'self' data: cdn.jsdelivr.net fonts.bunny.net",
-            "connect-src 'self' https:",
+            $connectSrc,
             "frame-ancestors 'none'",
             "base-uri 'self'",
             "form-action 'self'",
-            'upgrade-insecure-requests',
-        ]);
+        ];
+
+        if (! app()->environment('local')) {
+            $cspList[] = 'upgrade-insecure-requests';
+        }
+
+        $csp = implode('; ', $cspList);
         $response->header('Content-Security-Policy', $csp);
 
         // Prevent clickjacking attacks

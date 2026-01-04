@@ -11,18 +11,35 @@ class StoreDnsZoneRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return true;
+        return $this->user()->can('create', \App\Models\DnsZone::class);
     }
 
     /**
      * Get the validation rules that apply to the request.
-     *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
         return [
-            'domain' => ['required', 'string', 'unique:dns_zones,domain', 'regex:/^(?!:\/\/)([a-zA-Z0-9-_]+\.)*[a-zA-Z0-9][a-zA-Z0-9-_]+\.[a-zA-Z]{2,11}?$/'],
+            'domain' => [
+                'required',
+                'string',
+                'min:4',
+                'max:253',
+                'regex:/^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z0-9]{2,}$/i',
+                'unique:dns_zones,domain',
+            ],
+        ];
+    }
+
+    /**
+     * Get the error messages for the defined validation rules.
+     */
+    public function messages(): array
+    {
+        return [
+            'domain.required' => 'Domain name is required.',
+            'domain.regex' => 'Domain name format is invalid.',
+            'domain.unique' => 'DNS zone already exists for this domain.',
         ];
     }
 }

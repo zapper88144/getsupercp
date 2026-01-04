@@ -24,6 +24,12 @@ interface Props {
 }
 
 export default function EditSchedule({ schedule }: Props) {
+    const breadcrumbs = [
+        { title: 'Backups', url: route('backups.index') },
+        { title: 'Schedules', url: route('backups.schedules.index') },
+        { title: 'Edit Schedule' },
+    ];
+
     const { data, setData, patch, processing, errors } = useForm({
         name: schedule.name,
         frequency: schedule.frequency,
@@ -41,6 +47,7 @@ export default function EditSchedule({ schedule }: Props) {
 
     return (
         <AuthenticatedLayout
+            breadcrumbs={breadcrumbs}
             header={
                 <div className="flex items-center gap-4">
                     <Link href={route('backups.schedules.index')}>

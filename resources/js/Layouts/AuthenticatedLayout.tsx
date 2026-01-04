@@ -1,5 +1,7 @@
 import ApplicationLogo from '@/Components/ApplicationLogo';
+import Breadcrumbs, { BreadcrumbItem } from '@/Components/Breadcrumbs';
 import Dropdown from '@/Components/Dropdown';
+import FlashMessages from '@/Components/FlashMessages';
 import SidebarNavLink from '@/Components/SidebarNavLink';
 import { Link, usePage } from '@inertiajs/react';
 import { PropsWithChildren, ReactNode, useState } from 'react';
@@ -7,7 +9,8 @@ import { PropsWithChildren, ReactNode, useState } from 'react';
 export default function Authenticated({
     header,
     children,
-}: PropsWithChildren<{ header?: ReactNode }>) {
+    breadcrumbs = [],
+}: PropsWithChildren<{ header?: ReactNode; breadcrumbs?: BreadcrumbItem[] }>) {
     const user = usePage().props.auth.user;
 
     const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -64,17 +67,17 @@ export default function Authenticated({
                         open={sidebarOpen}
                     />
                     <SidebarNavLink
+                        href={route('ssl.index')}
+                        active={route().current('ssl.index')}
+                        icon="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.333 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"
+                        label="SSL Certificates"
+                        open={sidebarOpen}
+                    />
+                    <SidebarNavLink
                         href={route('databases.index')}
                         active={route().current('databases.index')}
                         icon="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7m0 0V5c0-2.21-3.582-4-8-4S4 2.79 4 5v2m0 0a1 1 0 100 2 1 1 0 000-2m8 14a1 1 0 100 2 1 1 0 000-2"
                         label="Databases"
-                        open={sidebarOpen}
-                    />
-                    <SidebarNavLink
-                        href={route('admin.database.manager')}
-                        active={route().current('admin.database.manager')}
-                        icon="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
-                        label="DB Manager"
                         open={sidebarOpen}
                     />
                     <SidebarNavLink
@@ -141,13 +144,29 @@ export default function Authenticated({
                         open={sidebarOpen}
                     />
                     {user.is_admin && (
-                        <SidebarNavLink
-                            href={route('admin.users.index')}
-                            active={route().current('admin.users.index')}
-                            icon="M12 4.354a4 4 0 110 5.292M15 10H9m6 0a9 9 0 11-18 0 9 9 0 0118 0z"
-                            label="User Management"
-                            open={sidebarOpen}
-                        />
+                        <>
+                            <SidebarNavLink
+                                href={route('admin.database.manager')}
+                                active={route().current('admin.database.manager')}
+                                icon="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+                                label="DB Manager"
+                                open={sidebarOpen}
+                            />
+                            <SidebarNavLink
+                                href={route('admin.users.index')}
+                                active={route().current('admin.users.index')}
+                                icon="M12 4.354a4 4 0 110 5.292M15 10H9m6 0a9 9 0 11-18 0 9 9 0 0118 0z"
+                                label="User Management"
+                                open={sidebarOpen}
+                            />
+                            <SidebarNavLink
+                                href={route('admin.login-activities.index')}
+                                active={route().current('admin.login-activities.index')}
+                                icon="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                                label="Login Activity"
+                                open={sidebarOpen}
+                            />
+                        </>
                     )}
                 </nav>
 
@@ -219,7 +238,11 @@ export default function Authenticated({
                     </header>
                 )}
 
-                <main className="p-4 sm:p-6 lg:p-8">{children}</main>
+                <main className="p-4 sm:p-6 lg:p-8">
+                    <Breadcrumbs items={breadcrumbs} />
+                    <FlashMessages />
+                    {children}
+                </main>
             </div>
         </div>
     );

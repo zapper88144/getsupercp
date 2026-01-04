@@ -100,6 +100,7 @@ export default function Index({ logTypes }: Props) {
                     </div>
                 </div>
             }
+            breadcrumbs={[{ title: 'System Logs' }]}
         >
             <Head title="Log Viewer" />
 

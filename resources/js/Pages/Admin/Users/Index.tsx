@@ -6,7 +6,8 @@ import SecondaryButton from '@/Components/SecondaryButton';
 import TextInput from '@/Components/TextInput';
 import InputLabel from '@/Components/InputLabel';
 import InputError from '@/Components/InputError';
-import { FormEventHandler, useState } from 'react';
+import Modal from '@/Components/Modal';
+import { FormEvent, FormEventHandler, useState } from 'react';
 import {
   UserIcon,
   EnvelopeIcon,
@@ -19,7 +20,8 @@ import {
   XMarkIcon,
   CalendarIcon,
   CheckCircleIcon,
-  XCircleIcon
+  XCircleIcon,
+  ChevronDownIcon
 } from '@heroicons/react/24/outline';
 
 interface User {
@@ -46,6 +48,11 @@ interface PaginatedUsers {
 
 interface Props {
   users: PaginatedUsers;
+  filters: {
+    search: string;
+    role: string;
+    status: string;
+  };
   roles: string[];
   statuses: string[];
 }
@@ -63,9 +70,18 @@ const statusColors: Record<string, { bg: string; text: string; darkBg: string; d
   'inactive': { bg: 'bg-gray-100', text: 'text-gray-700', darkBg: 'dark:bg-gray-900/30', darkText: 'dark:text-gray-400', icon: XCircleIcon },
 };
 
-export default function UserIndex({ users, roles, statuses }: Props) {
-  const [searchQuery, setSearchQuery] = useState('');
+export default function UserIndex({ users, filters, roles, statuses }: Props) {
+  const [searchQuery, setSearchQuery] = useState(filters.search || '');
+  const [roleFilter, setRoleFilter] = useState(filters.role || '');
+  const [statusFilter, setStatusFilter] = useState(filters.status || '');
   const [isAdding, setIsAdding] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [showBulkSuspendModal, setShowBulkSuspendModal] = useState(false);
+  const [bulkSuspendReason, setBulkSuspendReason] = useState('');
+
+  const breadcrumbs = [
+    { title: 'User Management' },
+  ];
 
   const { data, setData, post, processing, errors, reset } = useForm({
     name: '',
@@ -75,6 +91,17 @@ export default function UserIndex({ users, roles, statuses }: Props) {
     role: 'user',
     status: 'active',
   });
+
+  const handleFilter = () => {
+    router.get(route('admin.users.index'), {
+      search: searchQuery,
+      role: roleFilter,
+      status: statusFilter,
+    }, {
+      preserveState: true,
+      replace: true,
+    });
+  };
 
   const submit: FormEventHandler = (e) => {
     e.preventDefault();
@@ -92,13 +119,55 @@ export default function UserIndex({ users, roles, statuses }: Props) {
     }
   };
 
-  const filteredUsers = users.data.filter(u =>
-    u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    u.email.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const toggleSelectAll = () => {
+    if (selectedIds.length === users.data.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(users.data.map(u => u.id));
+    }
+  };
+
+  const toggleSelectUser = (id: number) => {
+    if (selectedIds.includes(id)) {
+      setSelectedIds(selectedIds.filter(i => i !== id));
+    } else {
+      setSelectedIds([...selectedIds, id]);
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (confirm(`Are you sure you want to delete ${selectedIds.length} users? This action cannot be undone.`)) {
+      router.post(route('admin.users.bulk-delete'), { ids: selectedIds }, {
+        onSuccess: () => setSelectedIds([]),
+      });
+    }
+  };
+
+  const handleBulkUnsuspend = () => {
+    if (confirm(`Are you sure you want to unsuspend ${selectedIds.length} users?`)) {
+      router.post(route('admin.users.bulk-unsuspend'), { ids: selectedIds }, {
+        onSuccess: () => setSelectedIds([]),
+      });
+    }
+  };
+
+  const handleBulkSuspend = (e: FormEvent) => {
+    e.preventDefault();
+    router.post(route('admin.users.bulk-suspend'), {
+      ids: selectedIds,
+      reason: bulkSuspendReason
+    }, {
+      onSuccess: () => {
+        setSelectedIds([]);
+        setShowBulkSuspendModal(false);
+        setBulkSuspendReason('');
+      },
+    });
+  };
 
   return (
     <AuthenticatedLayout
+      breadcrumbs={breadcrumbs}
       header={
         <div className="flex justify-between items-center">
           <h2 className="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">
@@ -232,20 +301,85 @@ export default function UserIndex({ users, roles, statuses }: Props) {
           <div className="bg-white shadow sm:rounded-lg dark:bg-gray-800 overflow-hidden">
             <div className="p-6">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-                  All Users
-                </h3>
-                <div className="relative w-full md:w-64">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+                <div className="flex items-center gap-4">
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                    All Users
+                  </h3>
+                  {selectedIds.length > 0 && (
+                    <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-4 duration-300">
+                      <span className="text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2 py-1 rounded">
+                        {selectedIds.length} selected
+                      </span>
+                      <div className="h-4 w-px bg-gray-300 dark:bg-gray-700 mx-1"></div>
+                      <SecondaryButton
+                        onClick={() => setShowBulkSuspendModal(true)}
+                        className="!py-1 !px-3 text-xs"
+                      >
+                        Suspend
+                      </SecondaryButton>
+                      <SecondaryButton
+                        onClick={handleBulkUnsuspend}
+                        className="!py-1 !px-3 text-xs"
+                      >
+                        Unsuspend
+                      </SecondaryButton>
+                      <DangerButton
+                        onClick={handleBulkDelete}
+                        className="!py-1 !px-3 text-xs"
+                      >
+                        Delete
+                      </DangerButton>
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
+                  <div className="relative w-full md:w-64">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <MagnifyingGlassIcon className="h-5 w-5 text-gray-400" />
+                    </div>
+                    <TextInput
+                      type="text"
+                      className="block w-full pl-10 pr-3 py-2"
+                      placeholder="Search users..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onKeyUp={(e) => e.key === 'Enter' && handleFilter()}
+                    />
                   </div>
-                  <TextInput
-                    type="text"
-                    className="block w-full pl-10 pr-3 py-2"
-                    placeholder="Search users..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
+                  <select
+                    className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:focus:border-indigo-600 dark:focus:ring-indigo-600"
+                    value={roleFilter}
+                    onChange={(e) => {
+                      setRoleFilter(e.target.value);
+                      router.get(route('admin.users.index'), {
+                        search: searchQuery,
+                        role: e.target.value,
+                        status: statusFilter,
+                      }, { preserveState: true, replace: true });
+                    }}
+                  >
+                    <option value="">All Roles</option>
+                    {roles.map(role => (
+                      <option key={role} value={role}>{role.charAt(0).toUpperCase() + role.slice(1)}</option>
+                    ))}
+                  </select>
+                  <select
+                    className="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:focus:border-indigo-600 dark:focus:ring-indigo-600"
+                    value={statusFilter}
+                    onChange={(e) => {
+                      setStatusFilter(e.target.value);
+                      router.get(route('admin.users.index'), {
+                        search: searchQuery,
+                        role: roleFilter,
+                        status: e.target.value,
+                      }, { preserveState: true, replace: true });
+                    }}
+                  >
+                    <option value="">All Statuses</option>
+                    {statuses.map(status => (
+                      <option key={status} value={status}>{status.charAt(0).toUpperCase() + status.slice(1)}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -253,6 +387,14 @@ export default function UserIndex({ users, roles, statuses }: Props) {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="border-b border-gray-200 dark:border-gray-700">
+                      <th className="py-3 px-4 w-10">
+                        <input
+                          type="checkbox"
+                          className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:focus:ring-indigo-600 dark:focus:ring-offset-gray-800"
+                          checked={selectedIds.length === users.data.length && users.data.length > 0}
+                          onChange={toggleSelectAll}
+                        />
+                      </th>
                       <th className="py-3 px-4 font-semibold text-sm">User</th>
                       <th className="py-3 px-4 font-semibold text-sm">Role</th>
                       <th className="py-3 px-4 font-semibold text-sm">Status</th>
@@ -261,13 +403,24 @@ export default function UserIndex({ users, roles, statuses }: Props) {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredUsers.map((user) => {
+                    {users.data.map((user) => {
                       const roleColor = roleColors[user.role] || roleColors['user'];
                       const statusColor = statusColors[user.status] || statusColors['active'];
-                      const StatusIcon = statusColor.icon;
+                      const isSelected = selectedIds.includes(user.id);
 
                       return (
-                        <tr key={user.id} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 group transition-colors">
+                        <tr
+                          key={user.id}
+                          className={`border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 group transition-colors ${isSelected ? 'bg-indigo-50/30 dark:bg-indigo-900/10' : ''}`}
+                        >
+                          <td className="py-4 px-4">
+                            <input
+                              type="checkbox"
+                              className="rounded border-gray-300 text-indigo-600 shadow-sm focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:focus:ring-indigo-600 dark:focus:ring-offset-gray-800"
+                              checked={isSelected}
+                              onChange={() => toggleSelectUser(user.id)}
+                            />
+                          </td>
                           <td className="py-4 px-4">
                             <div className="flex items-center gap-3">
                               <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
@@ -306,20 +459,20 @@ export default function UserIndex({ users, roles, statuses }: Props) {
                           </td>
                           <td className="py-4 px-4 text-right">
                             <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <a
+                              <Link
                                 href={route('admin.users.show', user.id)}
                                 className="p-2 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 rounded-md text-indigo-600 dark:text-indigo-400"
                                 title="View"
                               >
                                 <ShieldCheckIcon className="w-5 h-5" />
-                              </a>
-                              <a
+                              </Link>
+                              <Link
                                 href={route('admin.users.edit', user.id)}
                                 className="p-2 hover:bg-blue-100 dark:hover:bg-blue-900/30 rounded-md text-blue-600 dark:text-blue-400"
                                 title="Edit"
                               >
                                 <PencilIcon className="w-5 h-5" />
-                              </a>
+                              </Link>
                               <button
                                 onClick={() => deleteUser(user.id)}
                                 className="p-2 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-md text-red-600"
@@ -332,9 +485,9 @@ export default function UserIndex({ users, roles, statuses }: Props) {
                         </tr>
                       );
                     })}
-                    {filteredUsers.length === 0 && (
+                    {users.data.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="py-12 text-center text-gray-500">
+                        <td colSpan={6} className="py-12 text-center text-gray-500">
                           <div className="flex flex-col items-center gap-2">
                             <UserIcon className="w-12 h-12 text-gray-300" />
                             <span>{searchQuery ? `No users matching "${searchQuery}"` : 'No users found.'}</span>
@@ -398,6 +551,41 @@ export default function UserIndex({ users, roles, statuses }: Props) {
           </div>
         </div>
       </div>
+
+      <Modal show={showBulkSuspendModal} onClose={() => setShowBulkSuspendModal(false)}>
+        <div className="p-6">
+          <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+            Bulk Suspend Users
+          </h2>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+            You are about to suspend {selectedIds.length} users. Please provide a reason for this action.
+          </p>
+
+          <form onSubmit={handleBulkSuspend} className="mt-6">
+            <div>
+              <InputLabel htmlFor="bulk_reason" value="Suspension Reason" />
+              <textarea
+                id="bulk_reason"
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:focus:border-indigo-600 dark:focus:ring-indigo-600"
+                rows={3}
+                value={bulkSuspendReason}
+                onChange={(e) => setBulkSuspendReason(e.target.value)}
+                required
+                placeholder="Violation of terms of service..."
+              />
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <SecondaryButton onClick={() => setShowBulkSuspendModal(false)}>
+                Cancel
+              </SecondaryButton>
+              <DangerButton type="submit">
+                Suspend Users
+              </DangerButton>
+            </div>
+          </form>
+        </div>
+      </Modal>
     </AuthenticatedLayout>
   );
 }

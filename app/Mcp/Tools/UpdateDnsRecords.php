@@ -23,18 +23,21 @@ class UpdateDnsRecords extends Tool
      */
     public function handle(Request $request): Response
     {
-        $zoneId = $request->input('zone_id');
-        $records = $request->input('records');
+        $validated = $request->validate([
+            'zone_id' => 'required|integer|exists:dns_zones,id',
+            'records' => 'required|array',
+            'records.*.name' => 'required|string',
+            'records.*.type' => 'required|string|in:A,AAAA,CNAME,MX,TXT,NS,SRV',
+            'records.*.value' => 'required|string',
+            'records.*.ttl' => 'nullable|integer',
+            'records.*.priority' => 'nullable|integer',
+            'records.*.id' => 'nullable|integer',
+        ]);
 
-        if (! $zoneId || ! $records) {
-            return Response::text('Error: zone_id and records parameters are required.');
-        }
+        $zoneId = $validated['zone_id'];
+        $records = $validated['records'];
 
-        $zone = DnsZone::find($zoneId);
-
-        if (! $zone) {
-            return Response::text('DNS zone not found.');
-        }
+        $zone = DnsZone::findOrFail($zoneId);
 
         $submittedIds = collect($records)->pluck('id')->filter()->toArray();
 

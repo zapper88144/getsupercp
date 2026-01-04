@@ -27,8 +27,8 @@ interface FileItem {
     permissions: string;
 }
 
-export default function Index() {
-    const [path, setPath] = useState('/');
+export default function Index({ initialPath }: { initialPath: string }) {
+    const [path, setPath] = useState(initialPath);
     const [files, setFiles] = useState<FileItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [editingFile, setEditingFile] = useState<{name: string, content: string} | null>(null);
@@ -66,16 +66,21 @@ export default function Index() {
     };
 
     const goBack = () => {
-        if (path === '/') return;
+        if (path === initialPath) return;
         const parts = path.split('/').filter(Boolean);
         parts.pop();
-        setPath('/' + parts.join('/'));
+        const newPath = '/' + parts.join('/');
+        if (newPath.length < initialPath.length && !newPath.startsWith(initialPath)) {
+            setPath(initialPath);
+        } else {
+            setPath(newPath);
+        }
     };
 
     const deleteItem = async (name: string) => {
         if (!confirm(`Are you sure you want to delete ${name}?`)) return;
         
-        const itemPath = path === '/' ? `/${name}` : `${path}/${name}`;
+        const itemPath = path.endsWith('/') ? `${path}${name}` : `${path}/${name}`;
         try {
             const response = await fetch('/file-manager/delete', {
                 method: 'DELETE',
@@ -95,7 +100,7 @@ export default function Index() {
 
     const createFolder = async () => {
         if (!newFolderName) return;
-        const folderPath = path === '/' ? `/${newFolderName}` : `${path}/${newFolderName}`;
+        const folderPath = path.endsWith('/') ? `${path}${newFolderName}` : `${path}/${newFolderName}`;
         try {
             const response = await fetch('/file-manager/create-directory', {
                 method: 'POST',
@@ -117,8 +122,8 @@ export default function Index() {
 
     const renameItem = async () => {
         if (!renamingItem || !renamingItem.newName) return;
-        const fromPath = path === '/' ? `/${renamingItem.oldName}` : `${path}/${renamingItem.oldName}`;
-        const toPath = path === '/' ? `/${renamingItem.newName}` : `${path}/${renamingItem.newName}`;
+        const fromPath = path.endsWith('/') ? `${path}${renamingItem.oldName}` : `${path}/${renamingItem.oldName}`;
+        const toPath = path.endsWith('/') ? `${path}${renamingItem.newName}` : `${path}/${renamingItem.newName}`;
         
         try {
             const response = await fetch('/file-manager/rename', {
@@ -140,11 +145,11 @@ export default function Index() {
 
     const moveItem = async () => {
         if (!movingItem || !movingItem.destination) return;
-        const fromPath = path === '/' ? `/${movingItem.name}` : `${path}/${movingItem.name}`;
+        const fromPath = path.endsWith('/') ? `${path}${movingItem.name}` : `${path}/${movingItem.name}`;
         let toPath = movingItem.destination;
         
         if (!toPath.startsWith('/')) {
-            toPath = path === '/' ? `/${toPath}` : `${path}/${toPath}`;
+            toPath = path.endsWith('/') ? `${path}${toPath}` : `${path}/${toPath}`;
         }
 
         if (toPath.endsWith('/')) {
@@ -170,7 +175,7 @@ export default function Index() {
     };
 
     const editFile = async (name: string) => {
-        const filePath = path === '/' ? `/${name}` : `${path}/${name}`;
+        const filePath = path.endsWith('/') ? `${path}${name}` : `${path}/${name}`;
         try {
             const response = await fetch(`/file-manager/read?path=${encodeURIComponent(filePath)}`);
             const data = await response.json();
@@ -182,7 +187,7 @@ export default function Index() {
 
     const saveFile = async () => {
         if (!editingFile) return;
-        const filePath = path === '/' ? `/${editingFile.name}` : `${path}/${editingFile.name}`;
+        const filePath = path.endsWith('/') ? `${path}${editingFile.name}` : `${path}/${editingFile.name}`;
         try {
             const response = await fetch('/file-manager/write', {
                 method: 'POST',
@@ -267,6 +272,7 @@ export default function Index() {
                     </div>
                 </div>
             }
+            breadcrumbs={[{ title: 'File Manager' }]}
         >
             <Head title="File Manager" />
 
@@ -285,23 +291,26 @@ export default function Index() {
                                 <div className="flex items-center gap-4 bg-gray-100 dark:bg-gray-700 p-2 rounded-lg flex-1">
                                     <button 
                                         onClick={goBack}
-                                        disabled={path === '/'}
+                                        disabled={path === initialPath}
                                         className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full disabled:opacity-50"
                                     >
                                         <ArrowLeftIcon className="w-5 h-5" />
                                     </button>
                                     <div className="flex items-center gap-1 font-mono text-sm overflow-x-auto whitespace-nowrap">
                                         <button 
-                                            onClick={() => setPath('/')}
-                                            className={`hover:text-indigo-600 dark:hover:text-indigo-400 ${path === '/' ? 'font-bold' : ''}`}
+                                            onClick={() => setPath(initialPath)}
+                                            className={`hover:text-indigo-600 dark:hover:text-indigo-400 ${path === initialPath ? 'font-bold' : ''}`}
                                         >
-                                            root
+                                            home
                                         </button>
-                                        {path.split('/').filter(Boolean).map((part, i, parts) => (
+                                        {path.replace(initialPath, '').split('/').filter(Boolean).map((part, i, parts) => (
                                             <div key={i} className="flex items-center gap-1">
                                                 <span className="text-gray-400">/</span>
                                                 <button 
-                                                    onClick={() => setPath('/' + parts.slice(0, i + 1).join('/'))}
+                                                    onClick={() => {
+                                                        const subPath = parts.slice(0, i + 1).join('/');
+                                                        setPath(initialPath.endsWith('/') ? `${initialPath}${subPath}` : `${initialPath}/${subPath}`);
+                                                    }}
                                                     className={`hover:text-indigo-600 dark:hover:text-indigo-400 ${i === parts.length - 1 ? 'font-bold' : ''}`}
                                                 >
                                                     {part}
@@ -469,7 +478,7 @@ export default function Index() {
                                                                 {file.type === 'file' && (
                                                                     <button 
                                                                         onClick={() => {
-                                                                            const filePath = path === '/' ? `/${file.name}` : `${path}/${file.name}`;
+                                                                            const filePath = path.endsWith('/') ? `${path}${file.name}` : `${path}/${file.name}`;
                                                                             window.location.href = `/file-manager/download?path=${encodeURIComponent(filePath)}`;
                                                                         }}
                                                                         className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md text-gray-500 hover:text-indigo-600"
@@ -479,7 +488,7 @@ export default function Index() {
                                                                     </button>
                                                                 )}
                                                                 <button 
-                                                                    onClick={() => setMovingItem({name: file.name, destination: path === '/' ? '/' : path + '/'})}
+                                                                    onClick={() => setMovingItem({name: file.name, destination: path.endsWith('/') ? path : path + '/'})}
                                                                     className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-md text-gray-500 hover:text-indigo-600"
                                                                     title="Move"
                                                                 >

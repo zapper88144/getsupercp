@@ -14,12 +14,15 @@ class DnsZone extends Model
         'user_id',
         'domain',
         'status',
+        'cloudflare_zone_id',
+        'cloudflare_proxy_enabled',
     ];
 
     protected function casts(): array
     {
         return [
             'status' => 'string',
+            'cloudflare_proxy_enabled' => 'boolean',
         ];
     }
 

@@ -22,8 +22,13 @@ class GetRedisKey extends Tool
      */
     public function handle(Request $request): Response
     {
-        $key = $request->input('key');
-        $connection = $request->input('connection', 'default');
+        $validated = $request->validate([
+            'key' => 'required|string',
+            'connection' => 'string',
+        ]);
+
+        $key = $validated['key'];
+        $connection = $validated['connection'] ?? 'default';
 
         try {
             $service = app(RedisService::class);

@@ -22,7 +22,11 @@ class DeleteFile extends Tool
      */
     public function handle(Request $request): Response
     {
-        $path = $request->input('path');
+        $validated = $request->validate([
+            'path' => 'required|string',
+        ]);
+
+        $path = $validated['path'];
 
         $daemon = app(RustDaemonClient::class);
 

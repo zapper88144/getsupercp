@@ -23,17 +23,11 @@ class DeleteEmailAccount extends Tool
      */
     public function handle(Request $request): Response
     {
-        $accountId = $request->input('account_id');
+        $validated = $request->validate([
+            'account_id' => 'required|integer|exists:email_accounts,id',
+        ]);
 
-        if (! $accountId) {
-            return Response::text('Error: account_id parameter is required.');
-        }
-
-        $account = EmailAccount::find($accountId);
-
-        if (! $account) {
-            return Response::text('Email account not found.');
-        }
+        $account = EmailAccount::findOrFail($validated['account_id']);
 
         $email = $account->email;
 

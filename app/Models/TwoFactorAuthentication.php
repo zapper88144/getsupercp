@@ -26,7 +26,7 @@ class TwoFactorAuthentication extends Model
     {
         return [
             'secret' => 'encrypted',
-            'recovery_codes' => 'encrypted,json',
+            'recovery_codes' => 'encrypted:array',
             'is_enabled' => 'boolean',
             'enabled_at' => 'datetime',
             'last_failed_at' => 'datetime',

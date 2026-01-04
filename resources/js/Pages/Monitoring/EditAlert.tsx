@@ -59,6 +59,11 @@ export default function EditAlert({ alert }: Props) {
                     </h2>
                 </div>
             }
+            breadcrumbs={[
+                { title: 'System Monitoring', url: route('monitoring.index') },
+                { title: 'Monitoring Alerts', url: route('monitoring.alerts.index') },
+                { title: 'Edit Alert' }
+            ]}
         >
             <Head title="Edit Alert" />
 

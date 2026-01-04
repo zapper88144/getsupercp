@@ -2,42 +2,49 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\RustDaemonClient;
+use App\Services\FileService;
+use App\Traits\HandlesDaemonErrors;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class FileManagerController extends Controller
 {
-    public function __construct(protected RustDaemonClient $daemon) {}
+    use HandlesDaemonErrors;
 
-    public function index(): Response
+    public function __construct(protected FileService $fileService) {}
+
+    public function index(Request $request): Response
     {
-        return Inertia::render('FileManager/Index');
+        return Inertia::render('FileManager/Index', [
+            'initialPath' => "/home/{$request->user()->name}/web",
+        ]);
     }
 
     public function list(Request $request)
     {
-        $path = $request->get('path', '/');
-        $response = $this->daemon->call('list_files', ['path' => $path]);
+        $path = $this->getSafePath($request, $request->get('path'));
 
-        if (isset($response['error'])) {
-            return response()->json(['error' => $response['error']['message']], 400);
+        try {
+            $response = $this->fileService->listFiles($path);
+
+            return response()->json($response);
+        } catch (\Throwable $e) {
+            return $this->handleDaemonError($e, 'Failed to list files.');
         }
-
-        return response()->json($response['result']);
     }
 
     public function read(Request $request)
     {
-        $path = $request->get('path');
-        $response = $this->daemon->call('read_file', ['path' => $path]);
+        $path = $this->getSafePath($request, $request->get('path'));
 
-        if (isset($response['error'])) {
-            return response()->json(['error' => $response['error']['message']], 400);
+        try {
+            $response = $this->fileService->readFile($path);
+
+            return response()->json(['content' => $response]);
+        } catch (\Throwable $e) {
+            return $this->handleDaemonError($e, 'Failed to read file.');
         }
-
-        return response()->json(['content' => $response['result']]);
     }
 
     public function write(Request $request)
@@ -47,16 +54,15 @@ class FileManagerController extends Controller
             'content' => 'required|string',
         ]);
 
-        $response = $this->daemon->call('write_file', [
-            'path' => $request->path,
-            'content' => $request->content,
-        ]);
+        $path = $this->getSafePath($request, $request->path);
 
-        if (isset($response['error'])) {
-            return response()->json(['error' => $response['error']['message']], 400);
+        try {
+            $response = $this->fileService->writeFile($path, $request->content);
+
+            return response()->json(['message' => $response]);
+        } catch (\Throwable $e) {
+            return $this->handleDaemonError($e, 'Failed to write file.');
         }
-
-        return response()->json(['message' => $response['result']]);
     }
 
     public function delete(Request $request)
@@ -65,13 +71,15 @@ class FileManagerController extends Controller
             'path' => 'required|string',
         ]);
 
-        $response = $this->daemon->call('delete_file', ['path' => $request->path]);
+        $path = $this->getSafePath($request, $request->path);
 
-        if (isset($response['error'])) {
-            return response()->json(['error' => $response['error']['message']], 400);
+        try {
+            $response = $this->fileService->deleteFile($path);
+
+            return response()->json(['message' => $response]);
+        } catch (\Throwable $e) {
+            return $this->handleDaemonError($e, 'Failed to delete file.');
         }
-
-        return response()->json(['message' => $response['result']]);
     }
 
     public function createDirectory(Request $request)
@@ -80,13 +88,15 @@ class FileManagerController extends Controller
             'path' => 'required|string',
         ]);
 
-        $response = $this->daemon->call('create_directory', ['path' => $request->path]);
+        $path = $this->getSafePath($request, $request->path);
 
-        if (isset($response['error'])) {
-            return response()->json(['error' => $response['error']['message']], 400);
+        try {
+            $response = $this->fileService->createDirectory($path);
+
+            return response()->json(['message' => $response]);
+        } catch (\Throwable $e) {
+            return $this->handleDaemonError($e, 'Failed to create directory.');
         }
-
-        return response()->json(['message' => $response['result']]);
     }
 
     public function rename(Request $request)
@@ -96,16 +106,16 @@ class FileManagerController extends Controller
             'to' => 'required|string',
         ]);
 
-        $response = $this->daemon->call('rename_file', [
-            'from' => $request->from,
-            'to' => $request->to,
-        ]);
+        $from = $this->getSafePath($request, $request->from);
+        $to = $this->getSafePath($request, $request->to);
 
-        if (isset($response['error'])) {
-            return response()->json(['error' => $response['error']['message']], 400);
+        try {
+            $response = $this->fileService->renameFile($from, $to);
+
+            return response()->json(['message' => $response]);
+        } catch (\Throwable $e) {
+            return $this->handleDaemonError($e, 'Failed to rename file.');
         }
-
-        return response()->json(['message' => $response['result']]);
     }
 
     public function upload(Request $request)
@@ -118,17 +128,15 @@ class FileManagerController extends Controller
         $file = $request->file('file');
         $content = file_get_contents($file->getRealPath());
         $targetPath = rtrim($request->path, '/').'/'.$file->getClientOriginalName();
+        $targetPath = $this->getSafePath($request, $targetPath);
 
-        $response = $this->daemon->call('write_file', [
-            'path' => $targetPath,
-            'content' => $content,
-        ]);
+        try {
+            $this->fileService->writeFile($targetPath, $content);
 
-        if (isset($response['error'])) {
-            return response()->json(['error' => $response['error']['message']], 400);
+            return response()->json(['message' => 'File uploaded successfully']);
+        } catch (\Throwable $e) {
+            return $this->handleDaemonError($e, 'Failed to upload file.');
         }
-
-        return response()->json(['message' => 'File uploaded successfully']);
     }
 
     public function download(Request $request)
@@ -137,16 +145,34 @@ class FileManagerController extends Controller
             'path' => 'required|string',
         ]);
 
-        $response = $this->daemon->call('read_file', ['path' => $request->path]);
+        $path = $this->getSafePath($request, $request->path);
 
-        if (isset($response['error'])) {
-            return response()->json(['error' => $response['error']['message']], 400);
+        try {
+            $response = $this->fileService->readFile($path);
+            $filename = basename($path);
+
+            return response($response)
+                ->header('Content-Type', 'application/octet-stream')
+                ->header('Content-Disposition', 'attachment; filename="'.$filename.'"');
+        } catch (\Throwable $e) {
+            return $this->handleDaemonError($e, 'Failed to download file.');
+        }
+    }
+
+    protected function getSafePath(Request $request, ?string $path): string
+    {
+        $user = $request->user();
+        $defaultPath = "/home/{$user->name}/web";
+
+        if (! $path) {
+            return $defaultPath;
         }
 
-        $filename = basename($request->path);
-        
-        return response($response['result'])
-            ->header('Content-Type', 'application/octet-stream')
-            ->header('Content-Disposition', 'attachment; filename="' . $filename . '"');
+        // Ensure path starts with /home/{user->name}/web for security if not admin
+        if (! $user->is_admin && ! str_starts_with($path, "/home/{$user->name}/web")) {
+            return $defaultPath;
+        }
+
+        return $path;
     }
 }

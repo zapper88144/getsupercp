@@ -22,8 +22,13 @@ class FlushRedisDatabase extends Tool
      */
     public function handle(Request $request): Response
     {
-        $mode = $request->input('mode', 'database');
-        $connection = $request->input('connection', 'default');
+        $validated = $request->validate([
+            'mode' => 'in:database,all',
+            'connection' => 'string',
+        ]);
+
+        $mode = $validated['mode'] ?? 'database';
+        $connection = $validated['connection'] ?? 'default';
 
         try {
             $service = app(RedisService::class);

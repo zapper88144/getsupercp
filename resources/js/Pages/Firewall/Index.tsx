@@ -111,6 +111,7 @@ export default function Index({ rules, status }: Props) {
                     </button>
                 </div>
             }
+            breadcrumbs={[{ title: 'Firewall Management' }]}
         >
             <Head title="Firewall" />
 

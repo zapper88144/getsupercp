@@ -22,8 +22,13 @@ class GetRedisInfo extends Tool
      */
     public function handle(Request $request): Response
     {
-        $section = $request->input('section', 'default');
-        $connection = $request->input('connection', 'default');
+        $validated = $request->validate([
+            'section' => 'string',
+            'connection' => 'string',
+        ]);
+
+        $section = $validated['section'] ?? 'default';
+        $connection = $validated['connection'] ?? 'default';
 
         try {
             $service = app(RedisService::class);

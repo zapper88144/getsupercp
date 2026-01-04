@@ -1,21 +1,26 @@
-import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { PageProps } from '@/types';
-import { Head } from '@inertiajs/react';
-import DeleteUserForm from './Partials/DeleteUserForm';
-import UpdatePasswordForm from './Partials/UpdatePasswordForm';
-import UpdateProfileInformationForm from './Partials/UpdateProfileInformationForm';
-import { 
-    UserCircleIcon, 
-    KeyIcon, 
-    ExclamationTriangleIcon 
-} from '@heroicons/react/24/outline';
+import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
+import { PageProps } from "@/types";
+import { Head } from "@inertiajs/react";
+import DeleteUserForm from "./Partials/DeleteUserForm";
+import UpdatePasswordForm from "./Partials/UpdatePasswordForm";
+import UpdateProfileInformationForm from "./Partials/UpdateProfileInformationForm";
+import TwoFactorAuthenticationForm from "./Partials/TwoFactorAuthenticationForm";
+import {
+    UserCircleIcon,
+    KeyIcon,
+    ExclamationTriangleIcon,
+    ShieldCheckIcon,
+} from "@heroicons/react/24/outline";
 
 export default function Edit({
     mustVerifyEmail,
     status,
 }: PageProps<{ mustVerifyEmail: boolean; status?: string }>) {
+    const breadcrumbs = [{ title: "Profile Settings" }];
+
     return (
         <AuthenticatedLayout
+            breadcrumbs={breadcrumbs}
             header={
                 <h2 className="text-xl font-semibold leading-tight text-gray-800 dark:text-gray-200">
                     Profile Settings
@@ -44,6 +49,23 @@ export default function Edit({
                                 status={status}
                                 className="max-w-xl"
                             />
+                        </div>
+                    </div>
+
+                    {/* Two-Factor Authentication */}
+                    <div className="overflow-hidden rounded-xl bg-white shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
+                        <div className="border-b border-gray-100 px-6 py-4 dark:border-gray-700">
+                            <div className="flex items-center gap-3">
+                                <div className="rounded-lg bg-blue-50 p-2 dark:bg-blue-900/20">
+                                    <ShieldCheckIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                                </div>
+                                <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                                    Two-Factor Authentication
+                                </h3>
+                            </div>
+                        </div>
+                        <div className="p-6">
+                            <TwoFactorAuthenticationForm className="max-w-xl" />
                         </div>
                     </div>
 
@@ -85,4 +107,3 @@ export default function Edit({
         </AuthenticatedLayout>
     );
 }
-

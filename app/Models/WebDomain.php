@@ -14,6 +14,7 @@ class WebDomain extends Model
         'domain',
         'root_path',
         'php_version',
+        'size_bytes',
         'is_active',
         'has_ssl',
         'ssl_certificate_path',

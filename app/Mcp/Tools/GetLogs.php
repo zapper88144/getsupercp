@@ -22,8 +22,13 @@ class GetLogs extends Tool
      */
     public function handle(Request $request): Response
     {
-        $logType = $request->input('log_type');
-        $lines = $request->input('lines', 100);
+        $validated = $request->validate([
+            'log_type' => 'required|string|in:daemon,nginx_access,nginx_error,php_error',
+            'lines' => 'nullable|integer|min:1|max:1000',
+        ]);
+
+        $logType = $validated['log_type'];
+        $lines = $validated['lines'] ?? 100;
 
         $daemon = app(RustDaemonClient::class);
 

@@ -36,5 +36,19 @@ class AppServiceProvider extends ServiceProvider
         foreach ($this->policies as $model => $policy) {
             Gate::policy($model, $policy);
         }
+
+        // Register event listeners
+        $this->registerEventListeners();
+    }
+
+    /**
+     * Register event listeners.
+     */
+    private function registerEventListeners(): void
+    {
+        \Illuminate\Support\Facades\Event::listen(
+            \Illuminate\Auth\Events\Failed::class,
+            \App\Listeners\RecordFailedLogin::class,
+        );
     }
 }

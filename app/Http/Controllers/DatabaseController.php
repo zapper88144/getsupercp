@@ -3,7 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\Database;
-use App\Services\RustDaemonClient;
+use App\Services\DatabaseService;
+use App\Traits\HandlesDaemonErrors;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -11,8 +12,10 @@ use Inertia\Response;
 
 class DatabaseController extends Controller
 {
+    use HandlesDaemonErrors;
+
     public function __construct(
-        protected RustDaemonClient $daemon
+        protected DatabaseService $databaseService
     ) {}
 
     /**
@@ -20,8 +23,19 @@ class DatabaseController extends Controller
      */
     public function index(Request $request): Response
     {
+        $query = $request->user()->databases();
+
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                    ->orWhere('db_user', 'like', "%{$search}%");
+            });
+        }
+
         return Inertia::render('Databases/Index', [
-            'databases' => $request->user()->databases()->latest()->get(),
+            'databases' => $query->latest()->paginate(10)->withQueryString(),
+            'filters' => $request->only(['search']),
         ]);
     }
 
@@ -45,15 +59,16 @@ class DatabaseController extends Controller
             'type' => ['required', 'in:mysql,postgres'],
         ]);
 
-        $database = $request->user()->databases()->create($validated);
-
-        // Sync with daemon
-        $this->daemon->call('create_database', [
-            'name' => $database->name,
-            'user' => $database->db_user,
-            'password' => $request->db_password, // Use raw password for daemon
-            'type' => $database->type,
-        ]);
+        try {
+            $this->databaseService->create($request->user(), [
+                'name' => $validated['name'],
+                'db_user' => $validated['db_user'],
+                'password' => $validated['db_password'],
+                'engine' => $validated['type'],
+            ]);
+        } catch (\Throwable $e) {
+            return $this->handleDaemonError($e, 'Failed to create database on the system.', route('databases.index'));
+        }
 
         return redirect()->route('databases.index');
     }
@@ -65,13 +80,11 @@ class DatabaseController extends Controller
     {
         $this->authorize('delete', $database);
 
-        // Sync with daemon
-        $this->daemon->call('delete_database', [
-            'name' => $database->name,
-            'type' => $database->type,
-        ]);
-
-        $database->delete();
+        try {
+            $this->databaseService->delete($database);
+        } catch (\Throwable $e) {
+            return $this->handleDaemonError($e, 'Failed to delete database from the system.', route('databases.index'));
+        }
 
         return redirect()->route('databases.index');
     }

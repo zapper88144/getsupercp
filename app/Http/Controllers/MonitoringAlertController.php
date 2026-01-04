@@ -4,32 +4,48 @@ namespace App\Http\Controllers;
 
 use App\Models\MonitoringAlert;
 use App\Models\User;
+use App\Services\MonitoringService;
+use Exception;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class MonitoringAlertController extends Controller
 {
-    public function index(): Response
-    {
-        /** @var User $user */
-        $user = auth()->guard('web')->user();
-        $alerts = $user->monitoringAlerts()
-            ->latest()
-            ->get()
-            ->map(fn ($alert) => [
-                ...$alert->toArray(),
-                'is_triggered' => $alert->isTriggered(),
-                'time_since_last_notification' => $alert->timeSinceLastNotification(),
-            ]);
+    public function __construct(private MonitoringService $service) {}
 
-        return Inertia::render('Monitoring/Alerts', [
-            'alerts' => $alerts,
-        ]);
+    public function index(): Response|RedirectResponse
+    {
+        $this->authorize('viewAny', MonitoringAlert::class);
+
+        try {
+            /** @var User $user */
+            $user = auth()->guard('web')->user();
+            $alerts = $user->monitoringAlerts()
+                ->latest()
+                ->get()
+                ->map(fn ($alert) => [
+                    ...$alert->toArray(),
+                    'is_triggered' => $alert->isTriggered(),
+                    'time_since_last_notification' => $alert->timeSinceLastNotification(),
+                ]);
+
+            $metrics = $this->service->getMetrics();
+
+            return Inertia::render('Monitoring/Alerts', [
+                'alerts' => $alerts,
+                'metrics' => $metrics,
+            ]);
+        } catch (Exception $e) {
+            return back()->with('error', 'Failed to load monitoring alerts.');
+        }
     }
 
-    public function create()
+    public function create(): Response
     {
+        $this->authorize('create', MonitoringAlert::class);
+
         return Inertia::render('Monitoring/CreateAlert', [
             'metrics' => ['cpu', 'memory', 'disk', 'bandwidth', 'load_average'],
             'comparisons' => ['>', '>=', '<', '<=', '==', '!='],
@@ -37,30 +53,36 @@ class MonitoringAlertController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'metric' => 'required|in:cpu,memory,disk,bandwidth,load_average',
-            'threshold_percentage' => 'required|numeric|between:0,100',
-            'comparison' => 'required|in:>,>=,<,<=,==,!=',
-            'frequency' => 'required|in:immediate,5min,15min,30min,1hour',
-            'notify_email' => 'boolean',
-            'notify_webhook' => 'boolean',
-            'webhook_url' => 'nullable|url',
-        ]);
+        $this->authorize('create', MonitoringAlert::class);
 
-        /** @var User $user */
-        $user = auth()->guard('web')->user();
-        $user->monitoringAlerts()->create($validated + [
-            'is_enabled' => true,
-        ]);
+        try {
+            $validated = $request->validate([
+                'name' => 'required|string|max:255',
+                'metric' => 'required|in:cpu,memory,disk,bandwidth,load_average',
+                'threshold_percentage' => 'required|numeric|between:0,100',
+                'comparison' => 'required|in:>,>=,<,<=,==,!=',
+                'frequency' => 'required|in:immediate,5min,15min,30min,1hour',
+                'notify_email' => 'boolean',
+                'notify_webhook' => 'boolean',
+                'webhook_url' => 'nullable|url',
+            ]);
 
-        return redirect()->route('monitoring.alerts')
-            ->with('success', 'Monitoring alert created.');
+            /** @var User $user */
+            $user = auth()->guard('web')->user();
+            $user->monitoringAlerts()->create($validated + [
+                'is_enabled' => true,
+            ]);
+
+            return redirect()->route('monitoring.alerts')
+                ->with('success', 'Monitoring alert created.');
+        } catch (Exception $e) {
+            return back()->withInput()->with('error', 'Failed to create alert: '.$e->getMessage());
+        }
     }
 
-    public function edit(MonitoringAlert $alert)
+    public function edit(MonitoringAlert $alert): Response
     {
         $this->authorize('update', $alert);
 
@@ -72,7 +94,7 @@ class MonitoringAlertController extends Controller
         ]);
     }
 
-    public function update(Request $request, MonitoringAlert $alert)
+    public function update(Request $request, MonitoringAlert $alert): RedirectResponse
     {
         $this->authorize('update', $alert);
 
@@ -89,22 +111,30 @@ class MonitoringAlertController extends Controller
         return back()->with('success', 'Monitoring alert updated.');
     }
 
-    public function toggle(MonitoringAlert $alert)
+    public function toggle(MonitoringAlert $alert): RedirectResponse
     {
         $this->authorize('update', $alert);
 
-        $alert->update(['is_enabled' => ! $alert->is_enabled]);
+        try {
+            $alert->update(['is_enabled' => ! $alert->is_enabled]);
 
-        return back()->with('success', 'Alert '.($alert->is_enabled ? 'enabled' : 'disabled').'.');
+            return back()->with('success', 'Alert '.($alert->is_enabled ? 'enabled' : 'disabled').'.');
+        } catch (Exception $e) {
+            return back()->with('error', 'Failed to toggle alert: '.$e->getMessage());
+        }
     }
 
-    public function destroy(MonitoringAlert $alert)
+    public function destroy(MonitoringAlert $alert): RedirectResponse
     {
         $this->authorize('delete', $alert);
 
-        $alert->delete();
+        try {
+            $alert->delete();
 
-        return redirect()->route('monitoring.alerts')
-            ->with('success', 'Monitoring alert deleted.');
+            return redirect()->route('monitoring.alerts')
+                ->with('success', 'Monitoring alert deleted.');
+        } catch (Exception $e) {
+            return back()->with('error', 'Failed to delete alert: '.$e->getMessage());
+        }
     }
 }

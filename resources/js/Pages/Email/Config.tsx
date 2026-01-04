@@ -83,6 +83,7 @@ export default function Config({ config }: Props) {
                         Email Server Configuration
                     </h2>
                 }
+                breadcrumbs={[{ title: 'Email Configuration' }]}
             >
                 <Head title="Email Configuration" />
 
@@ -125,6 +126,7 @@ export default function Config({ config }: Props) {
                     )}
                 </div>
             }
+            breadcrumbs={[{ title: 'Email Configuration' }]}
         >
             <Head title="Email Configuration" />
 

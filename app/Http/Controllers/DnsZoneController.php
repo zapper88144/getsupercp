@@ -3,27 +3,38 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreDnsZoneRequest;
-use App\Models\DnsRecord;
+use App\Jobs\SyncDnsToCloudflare;
 use App\Models\DnsZone;
-use App\Services\RustDaemonClient;
+use App\Services\CloudflareService;
+use App\Services\DnsService;
+use App\Traits\HandlesDaemonErrors;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 
 class DnsZoneController extends Controller
 {
-    public function __construct(protected RustDaemonClient $daemon)
-    {
-    }
+    use HandlesDaemonErrors;
 
-    public function index()
+    public function __construct(
+        protected DnsService $dnsService,
+        protected CloudflareService $cloudflare
+    ) {}
+
+    public function index(Request $request)
     {
         $this->authorize('viewAny', DnsZone::class);
 
+        $query = Auth::user()->dnsZones()->withCount('dnsRecords')->latest();
+
+        if ($request->has('search')) {
+            $search = $request->get('search');
+            $query->where('domain', 'like', "%{$search}%");
+        }
+
         return Inertia::render('Dns/Index', [
-            'zones' => Auth::user()->dnsZones()
-                ->withCount('dnsRecords')
-                ->get(),
+            'zones' => $query->paginate(10)->withQueryString(),
+            'filters' => $request->only(['search']),
         ]);
     }
 
@@ -31,17 +42,30 @@ class DnsZoneController extends Controller
     {
         $this->authorize('create', DnsZone::class);
 
-        $zone = Auth::user()->dnsZones()->create($request->validated());
+        try {
+            $zone = $this->dnsService->createZone(Auth::user(), $request->validated());
 
-        // Create default records
-        $zone->dnsRecords()->createMany([
-            ['type' => 'A', 'name' => '@', 'value' => '127.0.0.1'],
-            ['type' => 'A', 'name' => 'www', 'value' => '127.0.0.1'],
-            ['type' => 'NS', 'name' => '@', 'value' => 'ns1.supercp.com.'],
-            ['type' => 'NS', 'name' => '@', 'value' => 'ns2.supercp.com.'],
-        ]);
+            // Create default records
+            $defaultIp = config('dns.default_ip', '127.0.0.1');
+            $nameservers = config('dns.nameservers', ['ns1.supercp.com.', 'ns2.supercp.com.']);
 
-        $this->syncWithDaemon($zone);
+            $records = [
+                ['type' => 'A', 'name' => '@', 'value' => $defaultIp],
+                ['type' => 'A', 'name' => 'www', 'value' => $defaultIp],
+            ];
+
+            foreach ($nameservers as $ns) {
+                $records[] = ['type' => 'NS', 'name' => '@', 'value' => $ns];
+            }
+
+            $this->dnsService->syncRecords($zone, $records);
+
+            if ($request->boolean('sync_cloudflare')) {
+                SyncDnsToCloudflare::dispatch($zone);
+            }
+        } catch (\Throwable $e) {
+            return $this->handleDaemonError($e, 'DNS zone created locally, but failed to sync with system daemon.', route('dns-zones.index'));
+        }
 
         return redirect()->route('dns-zones.index')->with('success', 'DNS zone created successfully.');
     }
@@ -52,6 +76,8 @@ class DnsZoneController extends Controller
 
         return Inertia::render('Dns/Show', [
             'zone' => $dnsZone->load('dnsRecords'),
+            'default_ip' => config('dns.default_ip', '127.0.0.1'),
+            'availableTypes' => ['A', 'AAAA', 'CNAME', 'MX', 'TXT', 'NS'],
         ]);
     }
 
@@ -69,49 +95,53 @@ class DnsZoneController extends Controller
             'records.*.ttl' => ['required', 'integer', 'min:60'],
         ]);
 
-        $submittedIds = collect($request->records)->pluck('id')->filter()->toArray();
-        
-        // Delete records not in submitted list
-        $dnsZone->dnsRecords()->whereNotIn('id', $submittedIds)->delete();
+        try {
+            $this->dnsService->syncRecords($dnsZone, $request->records);
 
-        foreach ($request->records as $recordData) {
-            if (isset($recordData['id'])) {
-                $dnsZone->dnsRecords()->where('id', $recordData['id'])->update(collect($recordData)->except('id')->toArray());
-            } else {
-                $dnsZone->dnsRecords()->create($recordData);
+            if ($dnsZone->cloudflare_zone_id) {
+                SyncDnsToCloudflare::dispatch($dnsZone);
             }
+        } catch (\Throwable $e) {
+            return $this->handleDaemonError($e, 'DNS records updated locally, but failed to sync with system daemon.');
         }
 
-        $this->syncWithDaemon($dnsZone);
-
         return redirect()->back()->with('success', 'DNS records updated successfully.');
+    }
+
+    public function purgeCloudflareCache(DnsZone $dnsZone)
+    {
+        $this->authorize('update', $dnsZone);
+
+        if ($this->cloudflare->purgeCache($dnsZone)) {
+            return redirect()->back()->with('success', 'Cloudflare cache purged successfully.');
+        }
+
+        return redirect()->back()->with('error', 'Failed to purge Cloudflare cache.');
+    }
+
+    public function toggleCloudflareProxy(DnsZone $dnsZone)
+    {
+        $this->authorize('update', $dnsZone);
+
+        $dnsZone->update([
+            'cloudflare_proxy_enabled' => ! $dnsZone->cloudflare_proxy_enabled,
+        ]);
+
+        SyncDnsToCloudflare::dispatch($dnsZone);
+
+        return redirect()->back()->with('success', 'Cloudflare proxy toggled successfully.');
     }
 
     public function destroy(DnsZone $dnsZone)
     {
         $this->authorize('delete', $dnsZone);
 
-        $this->daemon->call('delete_dns_zone', ['domain' => $dnsZone->domain]);
-        $dnsZone->delete();
+        try {
+            $this->dnsService->deleteZone($dnsZone);
+        } catch (\Throwable $e) {
+            return $this->handleDaemonError($e, 'Failed to delete DNS zone from system daemon.', route('dns-zones.index'));
+        }
 
         return redirect()->route('dns-zones.index')->with('success', 'DNS zone deleted successfully.');
-    }
-
-    protected function syncWithDaemon(DnsZone $zone)
-    {
-        $records = $zone->dnsRecords()->get()->map(function ($record) {
-            return [
-                'name' => $record->name,
-                'type' => $record->type,
-                'value' => $record->value,
-                'priority' => $record->priority,
-                'ttl' => $record->ttl,
-            ];
-        })->toArray();
-
-        $this->daemon->call('update_dns_zone', [
-            'domain' => $zone->domain,
-            'records' => $records,
-        ]);
     }
 }

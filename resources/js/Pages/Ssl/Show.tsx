@@ -89,6 +89,10 @@ export default function Show({ certificate }: Props) {
                     </h2>
                 </div>
             }
+            breadcrumbs={[
+                { title: 'SSL Certificates', url: route('ssl.index') },
+                { title: certificate.domain },
+            ]}
         >
             <Head title={certificate.domain} />
 
@@ -188,13 +192,15 @@ export default function Show({ certificate }: Props) {
                     {/* Actions */}
                     <div className="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg p-6">
                         <div className="flex gap-4">
-                            <button
-                                onClick={handleRenew}
-                                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition"
-                            >
-                                <ArrowPathIcon className="w-5 h-5" />
-                                Renew Certificate
-                            </button>
+                            {certificate.provider === 'letsencrypt' && (
+                                <button
+                                    onClick={handleRenew}
+                                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-md transition"
+                                >
+                                    <ArrowPathIcon className="w-5 h-5" />
+                                    Renew Certificate
+                                </button>
+                            )}
                             <button
                                 onClick={handleDelete}
                                 className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-md transition"

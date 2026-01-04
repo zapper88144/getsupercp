@@ -22,7 +22,11 @@ class PingRedisServer extends Tool
      */
     public function handle(Request $request): Response
     {
-        $connection = $request->input('connection', 'default');
+        $validated = $request->validate([
+            'connection' => 'string',
+        ]);
+
+        $connection = $validated['connection'] ?? 'default';
 
         try {
             $service = app(RedisService::class);

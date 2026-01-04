@@ -5,7 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Backup;
 use App\Models\Database;
 use App\Models\WebDomain;
-use App\Services\RustDaemonClient;
+use App\Services\BackupService;
+use App\Traits\HandlesDaemonErrors;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -15,14 +16,34 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class BackupController extends Controller
 {
-    public function __construct(protected RustDaemonClient $daemon) {}
+    use HandlesDaemonErrors;
 
-    public function index(): Response
+    public function __construct(protected BackupService $backupService) {}
+
+    public function index(Request $request): Response
     {
+        $query = Backup::latest();
+
+        if ($request->has('search')) {
+            $search = $request->get('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('source', 'like', "%{$search}%")
+                    ->orWhere('type', 'like', "%{$search}%");
+            });
+        }
+
+        $allBackups = Backup::all();
+
         return Inertia::render('Backups/Index', [
-            'backups' => Backup::latest()->get(),
+            'backups' => $query->paginate(10)->withQueryString(),
+            'filters' => $request->only(['search']),
             'domains' => WebDomain::all(),
             'databases' => Database::all(),
+            'stats' => [
+                'totalSize' => $allBackups->sum('size'),
+                'webBackups' => $allBackups->where('type', 'web')->count(),
+                'dbBackups' => $allBackups->where('type', 'database')->count(),
+            ],
         ]);
     }
 
@@ -39,27 +60,14 @@ class BackupController extends Controller
 
     public function restore(Backup $backup): RedirectResponse
     {
-        $this->authorize('view', $backup);
+        $this->authorize('update', $backup);
 
         try {
-            if ($backup->type === 'web') {
-                $domain = WebDomain::where('domain', $backup->source)->first();
-                $targetPath = $domain ? $domain->root_path : "/home/super/web/{$backup->source}/public";
-                
-                $this->daemon->call('restore_backup', [
-                    'path' => $backup->path,
-                    'target_path' => $targetPath,
-                ]);
-            } else {
-                $this->daemon->call('restore_db_backup', [
-                    'path' => $backup->path,
-                    'db_name' => $backup->source,
-                ]);
-            }
+            $this->backupService->restore($backup);
 
             return back()->with('success', 'Restore completed successfully.');
-        } catch (\Exception $e) {
-            return back()->with('error', 'Restore failed: '.$e->getMessage());
+        } catch (\Throwable $e) {
+            return $this->handleDaemonError($e, 'Restore failed.');
         }
     }
 
@@ -70,70 +78,29 @@ class BackupController extends Controller
             'source' => 'required|string',
         ]);
 
-        $type = $request->type;
-        $source = $request->source;
-        $userId = Auth::id();
-        $timestamp = now()->format('Y-m-d_H-i-s');
-        $name = "backup_{$type}_{$source}_{$timestamp}";
-        $path = "/var/lib/supercp/backups/{$name}.tar.gz"; // Default system path
-
-        $backup = Backup::create([
-            'user_id' => $userId,
-            'name' => $name,
-            'type' => $type,
-            'source' => $source,
-            'path' => $path,
-            'status' => 'pending',
-        ]);
-
-        // Trigger the backup via Rust daemon
         try {
-            if ($type === 'web') {
-                $domain = WebDomain::where('domain', $source)->first();
-                $sourcePath = $domain ? $domain->root_path : "/home/super/web/{$source}/public";
+            $this->backupService->createBackup(
+                Auth::user(),
+                $request->type,
+                $request->source
+            );
 
-                $response = $this->daemon->call('create_backup', [
-                    'name' => $name,
-                    'source_path' => $sourcePath,
-                ]);
-            } else {
-                // For database, source is the database name
-                $response = $this->daemon->call('create_db_backup', [
-                    'db_name' => $source,
-                ]);
-            }
-
-            if (isset($response['result'])) {
-                $actualPath = $response['result'];
-                $size = 0;
-                if (file_exists($actualPath)) {
-                    $size = filesize($actualPath);
-                }
-
-                $backup->update([
-                    'status' => 'completed',
-                    'size' => $size,
-                    'path' => $actualPath,
-                ]);
-            } else {
-                $backup->update(['status' => 'failed']);
-            }
-        } catch (\Exception $e) {
-            $backup->update(['status' => 'failed']);
+            return back()->with('success', 'Backup started successfully.');
+        } catch (\Throwable $e) {
+            return $this->handleDaemonError($e, 'Backup failed.');
         }
-
-        return back();
     }
 
     public function destroy(Backup $backup): RedirectResponse
     {
         $this->authorize('delete', $backup);
 
-        if (file_exists($backup->path)) {
-            unlink($backup->path);
-        }
-        $backup->delete();
+        try {
+            $this->backupService->delete($backup);
 
-        return back();
+            return back()->with('success', 'Backup deleted successfully.');
+        } catch (\Throwable $e) {
+            return $this->handleDaemonError($e, 'Failed to delete backup.');
+        }
     }
 }

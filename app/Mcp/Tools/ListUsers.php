@@ -22,7 +22,16 @@ class ListUsers extends Tool
      */
     public function handle(Request $request): Response
     {
-        $users = User::all(['id', 'name', 'email']);
+        $search = $request->input('search');
+
+        $query = User::query()->select(['id', 'name', 'email']);
+
+        if ($search) {
+            $query->where('name', 'like', "%{$search}%")
+                ->orWhere('email', 'like', "%{$search}%");
+        }
+
+        $users = $query->get();
 
         if ($users->isEmpty()) {
             return Response::text('No users found.');
@@ -39,7 +48,7 @@ class ListUsers extends Tool
     public function schema(JsonSchema $schema): array
     {
         return [
-            //
+            'search' => $schema->string()->description('Optional search term to filter users by name or email.'),
         ];
     }
 }

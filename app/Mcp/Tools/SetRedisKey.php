@@ -22,10 +22,17 @@ class SetRedisKey extends Tool
      */
     public function handle(Request $request): Response
     {
-        $key = $request->input('key');
-        $value = $request->input('value');
-        $ttl = $request->input('ttl');
-        $connection = $request->input('connection', 'default');
+        $validated = $request->validate([
+            'key' => 'required|string',
+            'value' => 'required|string',
+            'ttl' => 'nullable|integer|min:1',
+            'connection' => 'string',
+        ]);
+
+        $key = $validated['key'];
+        $value = $validated['value'];
+        $ttl = $validated['ttl'] ?? null;
+        $connection = $validated['connection'] ?? 'default';
 
         try {
             $service = app(RedisService::class);

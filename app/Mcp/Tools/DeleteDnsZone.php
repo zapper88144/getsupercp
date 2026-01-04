@@ -23,17 +23,11 @@ class DeleteDnsZone extends Tool
      */
     public function handle(Request $request): Response
     {
-        $zoneId = $request->input('zone_id');
+        $validated = $request->validate([
+            'zone_id' => 'required|integer|exists:dns_zones,id',
+        ]);
 
-        if (! $zoneId) {
-            return Response::text('Error: zone_id parameter is required.');
-        }
-
-        $zone = DnsZone::find($zoneId);
-
-        if (! $zone) {
-            return Response::text('DNS zone not found.');
-        }
+        $zone = DnsZone::findOrFail($validated['zone_id']);
 
         $domain = $zone->domain;
 

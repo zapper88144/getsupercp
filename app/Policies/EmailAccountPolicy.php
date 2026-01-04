@@ -4,32 +4,12 @@ namespace App\Policies;
 
 use App\Models\EmailAccount;
 use App\Models\User;
-use Illuminate\Auth\Access\Response;
 
 class EmailAccountPolicy
 {
-    /**
-     * Determine whether the user can view any models.
-     */
-    public function viewAny(User $user): bool
-    {
-        return false;
-    }
-
-    /**
-     * Determine whether the user can view the model.
-     */
-    public function view(User $user, EmailAccount $emailAccount): bool
-    {
-        return false;
-    }
-
-    /**
-     * Determine whether the user can create models.
-     */
     public function create(User $user): bool
     {
-        return false;
+        return true;
     }
 
     /**
@@ -37,7 +17,7 @@ class EmailAccountPolicy
      */
     public function update(User $user, EmailAccount $emailAccount): bool
     {
-        return false;
+        return $user->id === $emailAccount->user_id;
     }
 
     /**
@@ -46,6 +26,22 @@ class EmailAccountPolicy
     public function delete(User $user, EmailAccount $emailAccount): bool
     {
         return $user->id === $emailAccount->user_id;
+    }
+
+    /**
+     * Determine whether the user can view the model.
+     */
+    public function view(User $user, EmailAccount $emailAccount): bool
+    {
+        return $user->id === $emailAccount->user_id;
+    }
+
+    /**
+     * Determine whether the user can view any models.
+     */
+    public function viewAny(User $user): bool
+    {
+        return true;
     }
 
     /**
