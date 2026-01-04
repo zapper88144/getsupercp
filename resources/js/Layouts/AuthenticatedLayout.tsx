@@ -140,6 +140,15 @@ export default function Authenticated({
                         label="Monitoring"
                         open={sidebarOpen}
                     />
+                    {user.is_admin && (
+                        <SidebarNavLink
+                            href={route('admin.users.index')}
+                            active={route().current('admin.users.index')}
+                            icon="M12 4.354a4 4 0 110 5.292M15 10H9m6 0a9 9 0 11-18 0 9 9 0 0118 0z"
+                            label="User Management"
+                            open={sidebarOpen}
+                        />
+                    )}
                 </nav>
 
 

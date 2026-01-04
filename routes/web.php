@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\UserController as AdminUserController;
 use App\Http\Controllers\BackupController;
 use App\Http\Controllers\BackupScheduleController;
 use App\Http\Controllers\CronJobController;
@@ -165,6 +166,16 @@ Route::middleware('auth')->group(function () {
             Route::get('/check', [PhpMyAdminController::class, 'check'])
                 ->name('api.phpmyadmin.check');
         });
+    });
+
+    // Admin User Management Routes
+    Route::middleware('admin')->prefix('admin')->name('admin.')->group(function () {
+        Route::resource('users', AdminUserController::class);
+        Route::post('users/{user}/suspend', [AdminUserController::class, 'suspend'])->name('users.suspend');
+        Route::post('users/{user}/unsuspend', [AdminUserController::class, 'unsuspend'])->name('users.unsuspend');
+        Route::post('users/{user}/force-logout', [AdminUserController::class, 'forceLogout'])->name('users.forceLogout');
+        Route::post('users/{user}/reset-two-factor', [AdminUserController::class, 'resetTwoFactor'])->name('users.resetTwoFactor');
+        Route::get('users/stats', [AdminUserController::class, 'stats'])->name('users.stats');
     });
 });
 

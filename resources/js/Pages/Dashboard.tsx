@@ -197,7 +197,7 @@ export default function Dashboard({ stats, counts }: Props) {
                         <div className="overflow-hidden rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
                             <h3 className="text-lg font-medium text-gray-900 dark:text-white">CPU Usage History (%)</h3>
                             <div className="mt-6 min-h-64 w-full" style={{ minWidth: '0px', height: '256px' }}>
-                                <ResponsiveContainer width="100%" height="100%">
+                                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                                     <AreaChart data={history}>
                                         <defs>
                                             <linearGradient id="colorCpu" x1="0" y1="0" x2="0" y2="1">
@@ -221,7 +221,7 @@ export default function Dashboard({ stats, counts }: Props) {
                         <div className="overflow-hidden rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-200 dark:bg-gray-800 dark:ring-gray-700">
                             <h3 className="text-lg font-medium text-gray-900 dark:text-white">RAM Usage History (%)</h3>
                             <div className="mt-6 min-h-64 w-full" style={{ minWidth: '0px', height: '256px' }}>
-                                <ResponsiveContainer width="100%" height="100%">
+                                <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                                     <AreaChart data={history}>
                                         <defs>
                                             <linearGradient id="colorRam" x1="0" y1="0" x2="0" y2="1">

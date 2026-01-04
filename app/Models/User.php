@@ -23,6 +23,15 @@ class User extends Authenticatable
         'email',
         'password',
         'is_admin',
+        'role',
+        'status',
+        'phone',
+        'notes',
+        'last_login_at',
+        'last_login_ip',
+        'two_factor_enabled',
+        'suspended_at',
+        'suspended_reason',
     ];
 
     /**
@@ -46,6 +55,9 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_admin' => 'boolean',
+            'two_factor_enabled' => 'boolean',
+            'last_login_at' => 'datetime',
+            'suspended_at' => 'datetime',
         ];
     }
 
