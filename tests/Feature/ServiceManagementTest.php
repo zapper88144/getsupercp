@@ -35,14 +35,14 @@ class ServiceManagementTest extends TestCase
             'php8.4-fpm' => 'running',
             'mysql' => 'running',
             'redis-server' => 'stopped',
-            'daemon' => 'running'
+            'daemon' => 'running',
         ];
 
-        $this->mock(RustDaemonClient::class, function ($mock) use ($mockStatus) {
+        $this->partialMock(RustDaemonClient::class, function ($mock) use ($mockStatus) {
             $mock->shouldReceive('call')
                 ->with('get_status')
                 ->once()
-                ->andReturn(['result' => $mockStatus]);
+                ->andReturn($mockStatus);
         });
 
         $response = $this->actingAs($this->user)
@@ -54,16 +54,16 @@ class ServiceManagementTest extends TestCase
 
     public function test_user_can_restart_service(): void
     {
-        $this->mock(RustDaemonClient::class, function ($mock) {
+        $this->partialMock(RustDaemonClient::class, function ($mock) {
             $mock->shouldReceive('call')
                 ->with('restart_service', ['service' => 'nginx'])
                 ->once()
-                ->andReturn(['result' => 'Service nginx restarted successfully']);
+                ->andReturn('Service nginx restarted successfully');
         });
 
         $response = $this->actingAs($this->user)
             ->post(route('services.restart'), [
-                'service' => 'nginx'
+                'service' => 'nginx',
             ]);
 
         $response->assertStatus(200);
@@ -72,19 +72,19 @@ class ServiceManagementTest extends TestCase
 
     public function test_user_cannot_restart_unauthorized_service(): void
     {
-        $this->mock(RustDaemonClient::class, function ($mock) {
+        $this->partialMock(RustDaemonClient::class, function ($mock) {
             $mock->shouldReceive('call')
                 ->with('restart_service', ['service' => 'invalid-service'])
                 ->once()
-                ->andReturn(['error' => ['message' => 'Service not allowed']]);
+                ->andThrow(new \App\Exceptions\DaemonException('Service not allowed', -32000));
         });
 
         $response = $this->actingAs($this->user)
-            ->post(route('services.restart'), [
-                'service' => 'invalid-service'
+            ->postJson(route('services.restart'), [
+                'service' => 'invalid-service',
             ]);
 
         $response->assertStatus(500);
-        $response->assertJson(['message' => 'Service not allowed']);
+        $response->assertJsonFragment(['message' => 'Failed to restart service invalid-service: Service not allowed']);
     }
 }

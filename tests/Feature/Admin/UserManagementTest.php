@@ -3,7 +3,11 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\User;
+use App\Notifications\Admin\UserCreatedNotification;
+use App\Notifications\Admin\UserSuspendedNotification;
+use App\Notifications\Admin\UserUnsuspendedNotification;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Notification;
 use Tests\TestCase;
 
 class UserManagementTest extends TestCase
@@ -40,6 +44,7 @@ class UserManagementTest extends TestCase
      */
     public function test_super_admin_can_create_user(): void
     {
+        Notification::fake();
         $superAdmin = User::factory()->superAdmin()->create();
 
         $response = $this->actingAs($superAdmin)
@@ -58,6 +63,16 @@ class UserManagementTest extends TestCase
             'name' => 'John Doe',
             'email' => 'john@example.com',
             'role' => 'moderator',
+        ]);
+
+        $user = User::where('email', 'john@example.com')->first();
+        Notification::assertSentTo($user, UserCreatedNotification::class);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $superAdmin->id,
+            'action' => 'user_created',
+            'model' => User::class,
+            'model_id' => $user->id,
         ]);
     }
 
@@ -286,6 +301,7 @@ class UserManagementTest extends TestCase
      */
     public function test_admin_can_suspend_user(): void
     {
+        Notification::fake();
         $admin = User::factory()->admin()->create();
         $user = User::factory()->create();
 
@@ -299,6 +315,15 @@ class UserManagementTest extends TestCase
             'id' => $user->id,
             'status' => 'suspended',
             'suspended_reason' => 'Suspicious activity',
+        ]);
+
+        Notification::assertSentTo($user, UserSuspendedNotification::class);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $admin->id,
+            'action' => 'user_suspended',
+            'model' => User::class,
+            'model_id' => $user->id,
         ]);
     }
 
@@ -323,6 +348,7 @@ class UserManagementTest extends TestCase
      */
     public function test_admin_can_unsuspend_user(): void
     {
+        Notification::fake();
         $admin = User::factory()->admin()->create();
         $user = User::factory()->suspended()->create();
 
@@ -334,6 +360,15 @@ class UserManagementTest extends TestCase
             'id' => $user->id,
             'status' => 'active',
             'suspended_at' => null,
+        ]);
+
+        Notification::assertSentTo($user, UserUnsuspendedNotification::class);
+
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $admin->id,
+            'action' => 'user_unsuspended',
+            'model' => User::class,
+            'model_id' => $user->id,
         ]);
     }
 
@@ -460,5 +495,104 @@ class UserManagementTest extends TestCase
             'role' => 'admin',
             'is_admin' => true,
         ]);
+    }
+
+    /**
+     * Test that admins can bulk suspend users.
+     */
+    public function test_admin_can_bulk_suspend_users(): void
+    {
+        Notification::fake();
+        $admin = User::factory()->admin()->create();
+        $users = User::factory()->count(3)->create();
+        $ids = $users->pluck('id')->toArray();
+
+        $response = $this->actingAs($admin)
+            ->post(route('admin.users.bulk-suspend'), [
+                'ids' => $ids,
+                'reason' => 'Bulk suspension test',
+            ]);
+
+        $response->assertRedirect();
+        foreach ($ids as $id) {
+            $this->assertDatabaseHas('users', [
+                'id' => $id,
+                'status' => 'suspended',
+                'suspended_reason' => 'Bulk suspension test',
+            ]);
+        }
+
+        foreach ($users as $user) {
+            Notification::assertSentTo($user, UserSuspendedNotification::class);
+        }
+    }
+
+    /**
+     * Test that admins can bulk unsuspend users.
+     */
+    public function test_admin_can_bulk_unsuspend_users(): void
+    {
+        Notification::fake();
+        $admin = User::factory()->admin()->create();
+        $users = User::factory()->count(3)->suspended()->create();
+        $ids = $users->pluck('id')->toArray();
+
+        $response = $this->actingAs($admin)
+            ->post(route('admin.users.bulk-unsuspend'), [
+                'ids' => $ids,
+            ]);
+
+        $response->assertRedirect();
+        foreach ($ids as $id) {
+            $this->assertDatabaseHas('users', [
+                'id' => $id,
+                'status' => 'active',
+                'suspended_at' => null,
+            ]);
+        }
+
+        foreach ($users as $user) {
+            Notification::assertSentTo($user, UserUnsuspendedNotification::class);
+        }
+    }
+
+    /**
+     * Test that super admins can bulk delete users.
+     */
+    public function test_super_admin_can_bulk_delete_users(): void
+    {
+        $superAdmin = User::factory()->superAdmin()->create();
+        $users = User::factory()->count(3)->create();
+        $ids = $users->pluck('id')->toArray();
+
+        $response = $this->actingAs($superAdmin)
+            ->post(route('admin.users.bulk-delete'), [
+                'ids' => $ids,
+            ]);
+
+        $response->assertRedirect();
+        foreach ($users as $user) {
+            $this->assertModelMissing($user);
+        }
+    }
+
+    /**
+     * Test that admins cannot bulk delete other admins.
+     */
+    public function test_admin_cannot_bulk_delete_other_admins(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $otherAdmin = User::factory()->admin()->create();
+        $regularUser = User::factory()->create();
+
+        $response = $this->actingAs($admin)
+            ->post(route('admin.users.bulk-delete'), [
+                'ids' => [$otherAdmin->id, $regularUser->id],
+            ]);
+
+        $response->assertRedirect();
+        // Regular user should be deleted, but other admin should remain
+        $this->assertModelMissing($regularUser);
+        $this->assertModelExists($otherAdmin);
     }
 }

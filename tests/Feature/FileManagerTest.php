@@ -6,7 +6,6 @@ use App\Models\User;
 use App\Services\RustDaemonClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
-use Mockery;
 use Tests\TestCase;
 
 class FileManagerTest extends TestCase
@@ -37,11 +36,13 @@ class FileManagerTest extends TestCase
             ['name' => 'public', 'type' => 'directory', 'size' => 4096, 'modified' => time(), 'permissions' => '755'],
         ];
 
-        $this->mock(RustDaemonClient::class, function ($mock) use ($mockFiles) {
+        $path = "/home/{$this->user->name}/web";
+
+        $this->partialMock(RustDaemonClient::class, function ($mock) use ($mockFiles, $path) {
             $mock->shouldReceive('call')
-                ->with('list_files', ['path' => '/'])
+                ->with('list_files', ['path' => $path])
                 ->once()
-                ->andReturn(['result' => $mockFiles]);
+                ->andReturn($mockFiles);
         });
 
         $response = $this->actingAs($this->user)
@@ -54,16 +55,17 @@ class FileManagerTest extends TestCase
     public function test_user_can_read_file(): void
     {
         $content = "<?php echo 'hello';";
+        $path = "/home/{$this->user->name}/web/index.php";
 
-        $this->mock(RustDaemonClient::class, function ($mock) use ($content) {
+        $this->partialMock(RustDaemonClient::class, function ($mock) use ($content, $path) {
             $mock->shouldReceive('call')
-                ->with('read_file', ['path' => '/index.php'])
+                ->with('read_file', ['path' => $path])
                 ->once()
-                ->andReturn(['result' => $content]);
+                ->andReturn($content);
         });
 
         $response = $this->actingAs($this->user)
-            ->get(route('file-manager.read', ['path' => '/index.php']));
+            ->get(route('file-manager.read', ['path' => $path]));
 
         $response->assertStatus(200);
         $response->assertJson(['content' => $content]);
@@ -71,20 +73,22 @@ class FileManagerTest extends TestCase
 
     public function test_user_can_write_file(): void
     {
-        $this->mock(RustDaemonClient::class, function ($mock) {
+        $path = "/home/{$this->user->name}/web/test.txt";
+
+        $this->partialMock(RustDaemonClient::class, function ($mock) use ($path) {
             $mock->shouldReceive('call')
                 ->with('write_file', [
-                    'path' => '/test.txt',
-                    'content' => 'new content'
+                    'path' => $path,
+                    'content' => 'new content',
                 ])
                 ->once()
-                ->andReturn(['result' => 'File written successfully']);
+                ->andReturn('File written successfully');
         });
 
         $response = $this->actingAs($this->user)
             ->post(route('file-manager.write'), [
-                'path' => '/test.txt',
-                'content' => 'new content'
+                'path' => $path,
+                'content' => 'new content',
             ]);
 
         $response->assertStatus(200);
@@ -93,16 +97,18 @@ class FileManagerTest extends TestCase
 
     public function test_user_can_delete_file(): void
     {
-        $this->mock(RustDaemonClient::class, function ($mock) {
+        $path = "/home/{$this->user->name}/web/test.txt";
+
+        $this->partialMock(RustDaemonClient::class, function ($mock) use ($path) {
             $mock->shouldReceive('call')
-                ->with('delete_file', ['path' => '/test.txt'])
+                ->with('delete_file', ['path' => $path])
                 ->once()
-                ->andReturn(['result' => 'Item deleted successfully']);
+                ->andReturn('Item deleted successfully');
         });
 
         $response = $this->actingAs($this->user)
             ->delete(route('file-manager.delete'), [
-                'path' => '/test.txt'
+                'path' => $path,
             ]);
 
         $response->assertStatus(200);
@@ -111,16 +117,18 @@ class FileManagerTest extends TestCase
 
     public function test_user_can_create_directory(): void
     {
-        $this->mock(RustDaemonClient::class, function ($mock) {
+        $path = "/home/{$this->user->name}/web/new-folder";
+
+        $this->partialMock(RustDaemonClient::class, function ($mock) use ($path) {
             $mock->shouldReceive('call')
-                ->with('create_directory', ['path' => '/new-folder'])
+                ->with('create_directory', ['path' => $path])
                 ->once()
-                ->andReturn(['result' => 'Directory created successfully']);
+                ->andReturn('Directory created successfully');
         });
 
         $response = $this->actingAs($this->user)
             ->post(route('file-manager.create-directory'), [
-                'path' => '/new-folder'
+                'path' => $path,
             ]);
 
         $response->assertStatus(200);
@@ -131,21 +139,22 @@ class FileManagerTest extends TestCase
     {
         $file = UploadedFile::fake()->create('test.txt', 100);
         $content = file_get_contents($file->getRealPath());
+        $path = "/home/{$this->user->name}/web/test.txt";
 
-        $this->mock(RustDaemonClient::class, function ($mock) use ($content) {
+        $this->partialMock(RustDaemonClient::class, function ($mock) use ($content, $path) {
             $mock->shouldReceive('call')
                 ->with('write_file', [
-                    'path' => '/test.txt',
-                    'content' => $content
+                    'path' => $path,
+                    'content' => $content,
                 ])
                 ->once()
-                ->andReturn(['result' => 'File written successfully']);
+                ->andReturn('File written successfully');
         });
 
         $response = $this->actingAs($this->user)
             ->post(route('file-manager.upload'), [
-                'path' => '/',
-                'file' => $file
+                'path' => "/home/{$this->user->name}/web",
+                'file' => $file,
             ]);
 
         $response->assertStatus(200);

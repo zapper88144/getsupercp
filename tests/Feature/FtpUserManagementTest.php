@@ -2,8 +2,9 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
 use App\Models\FtpUser;
+use App\Models\User;
+use App\Services\RustDaemonClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -11,8 +12,18 @@ class FtpUserManagementTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->mock(RustDaemonClient::class, function ($mock) {
+            $mock->shouldReceive('call')->andReturn('success');
+        });
+    }
+
     public function test_user_can_list_ftp_users(): void
     {
+        /** @var User $user */
         $user = User::factory()->create();
         FtpUser::create([
             'user_id' => $user->id,
@@ -29,6 +40,7 @@ class FtpUserManagementTest extends TestCase
 
     public function test_user_can_create_ftp_user(): void
     {
+        /** @var User $user */
         $user = User::factory()->create();
 
         $response = $this->actingAs($user)->post('/ftp-users', [
@@ -47,6 +59,7 @@ class FtpUserManagementTest extends TestCase
 
     public function test_user_can_delete_ftp_user(): void
     {
+        /** @var User $user */
         $user = User::factory()->create();
         $ftpUser = FtpUser::create([
             'user_id' => $user->id,

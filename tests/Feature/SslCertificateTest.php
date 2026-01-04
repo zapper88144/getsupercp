@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\SslCertificate;
 use App\Models\User;
 use App\Models\WebDomain;
+use App\Services\RustDaemonClient;
+use Mockery;
 use Tests\TestCase;
 
 class SslCertificateTest extends TestCase
@@ -13,11 +15,17 @@ class SslCertificateTest extends TestCase
 
     private WebDomain $domain;
 
+    private $daemon;
+
     protected function setUp(): void
     {
         parent::setUp();
         $this->user = User::factory()->create();
         $this->domain = WebDomain::factory()->for($this->user)->create();
+
+        // Mock the RustDaemonClient
+        $this->daemon = Mockery::mock(RustDaemonClient::class);
+        $this->app->instance(RustDaemonClient::class, $this->daemon);
     }
 
     public function test_user_can_view_ssl_certificates(): void
@@ -35,10 +43,15 @@ class SslCertificateTest extends TestCase
 
     public function test_user_can_create_ssl_certificate(): void
     {
+        // Expect daemon call
+        $this->daemon->shouldReceive('requestSslCert')
+            ->once()
+            ->andReturn(true);
+
         $response = $this->actingAs($this->user)->post('/ssl', [
             'web_domain_id' => $this->domain->id,
             'provider' => 'letsencrypt',
-            'validation_method' => 'dns',
+            'validation_method' => 'http',
             'auto_renewal_enabled' => true,
         ]);
 
@@ -50,12 +63,72 @@ class SslCertificateTest extends TestCase
         ]);
     }
 
+    public function test_user_can_upload_custom_ssl_certificate(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+
+        $certificate = \Illuminate\Http\Testing\File::create('cert.crt', 100);
+        $privateKey = \Illuminate\Http\Testing\File::create('key.key', 100);
+
+        $response = $this->actingAs($this->user)->post('/ssl', [
+            'web_domain_id' => $this->domain->id,
+            'provider' => 'custom',
+            'input_type' => 'file',
+            'certificate' => $certificate,
+            'private_key' => $privateKey,
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('ssl_certificates', [
+            'user_id' => $this->user->id,
+            'web_domain_id' => $this->domain->id,
+            'provider' => 'custom',
+            'status' => 'active',
+        ]);
+
+        $cert = SslCertificate::where('provider', 'custom')->first();
+        $this->assertNotNull($cert->certificate_path);
+        $this->assertNotNull($cert->key_path);
+    }
+
+    public function test_user_can_create_custom_ssl_certificate_via_text(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+
+        $response = $this->actingAs($this->user)->post('/ssl', [
+            'web_domain_id' => $this->domain->id,
+            'provider' => 'custom',
+            'input_type' => 'text',
+            'certificate_text' => "-----BEGIN CERTIFICATE-----\nMIID...\n-----END CERTIFICATE-----",
+            'private_key_text' => "-----BEGIN PRIVATE KEY-----\nMIIE...\n-----END PRIVATE KEY-----",
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('ssl_certificates', [
+            'user_id' => $this->user->id,
+            'web_domain_id' => $this->domain->id,
+            'provider' => 'custom',
+            'status' => 'active',
+        ]);
+
+        $cert = SslCertificate::where('provider', 'custom')->latest()->first();
+        $this->assertNotNull($cert->certificate_path);
+        $this->assertNotNull($cert->key_path);
+        $this->assertStringContainsString('ssl/certificates/', $cert->certificate_path);
+        $this->assertStringContainsString('ssl/keys/', $cert->key_path);
+    }
+
     public function test_user_can_renew_certificate(): void
     {
         $certificate = SslCertificate::factory()
             ->for($this->user)
             ->for($this->domain, 'webDomain')
             ->create(['renewal_attempts' => 0]);
+
+        // Expect daemon call
+        $this->daemon->shouldReceive('requestSslCert')
+            ->once()
+            ->andReturn(true);
 
         $response = $this->actingAs($this->user)->post("/ssl/{$certificate->id}/renew");
 

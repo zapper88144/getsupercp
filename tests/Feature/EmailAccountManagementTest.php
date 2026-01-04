@@ -24,6 +24,7 @@ class EmailAccountManagementTest extends TestCase
 
     public function test_user_can_list_email_accounts(): void
     {
+        /** @var User $user */
         $user = User::factory()->create();
         EmailAccount::factory()->count(3)->create(['user_id' => $user->id]);
 
@@ -32,12 +33,13 @@ class EmailAccountManagementTest extends TestCase
         $response->assertStatus(200);
         $response->assertInertia(fn ($page) => $page
             ->component('Email/Index')
-            ->has('accounts', 3)
+            ->has('accounts.data', 3)
         );
     }
 
     public function test_user_can_create_email_account(): void
     {
+        /** @var User $user */
         $user = User::factory()->create();
         $domain = WebDomain::factory()->create([
             'user_id' => $user->id,
@@ -45,9 +47,9 @@ class EmailAccountManagementTest extends TestCase
         ]);
 
         $response = $this->actingAs($user)->post(route('email-accounts.store'), [
-            'username' => 'info',
-            'domain' => 'example.com',
-            'password' => 'password123',
+            'email' => 'info@example.com',
+            'password' => 'SecurePass123!',
+            'password_confirmation' => 'SecurePass123!',
             'quota_mb' => 500,
         ]);
 
@@ -61,6 +63,7 @@ class EmailAccountManagementTest extends TestCase
 
     public function test_user_cannot_create_duplicate_email_account(): void
     {
+        /** @var User $user */
         $user = User::factory()->create();
         $domain = WebDomain::factory()->create([
             'user_id' => $user->id,
@@ -72,30 +75,32 @@ class EmailAccountManagementTest extends TestCase
         ]);
 
         $response = $this->actingAs($user)->post(route('email-accounts.store'), [
-            'username' => 'info',
-            'domain' => 'example.com',
-            'password' => 'password123',
+            'email' => 'info@example.com',
+            'password' => 'SecurePass123!',
+            'password_confirmation' => 'SecurePass123!',
             'quota_mb' => 500,
         ]);
 
-        $response->assertSessionHasErrors('username');
+        $response->assertSessionHasErrors('email');
     }
 
     public function test_user_can_delete_email_account(): void
     {
+        /** @var User $user */
         $user = User::factory()->create();
         $account = EmailAccount::factory()->create(['user_id' => $user->id]);
 
         $response = $this->actingAs($user)->delete(route('email-accounts.destroy', $account));
 
         $response->assertRedirect(route('email-accounts.index'));
-        $this->assertDatabaseMissing('email_accounts', ['id' => $account->id]);
+        $this->assertSoftDeleted($account);
     }
 
     public function test_user_cannot_delete_others_email_account(): void
     {
-        $user1 = User::factory()->create();
+        /** @var User $user2 */
         $user2 = User::factory()->create();
+        $user1 = User::factory()->create();
         $account = EmailAccount::factory()->create(['user_id' => $user1->id]);
 
         $response = $this->actingAs($user2)->delete(route('email-accounts.destroy', $account));

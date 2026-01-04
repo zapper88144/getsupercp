@@ -18,15 +18,17 @@ class BackupManagementTest extends TestCase
         parent::setUp();
 
         $this->mock(RustDaemonClient::class, function ($mock) {
-            $mock->shouldReceive('call')->andReturn([
-                'status' => 'success',
-                'result' => '/tmp/mock_backup.tar.gz'
-            ]);
+            $mock->shouldReceive('createBackup')->andReturn('/tmp/mock_backup.tar.gz');
+            $mock->shouldReceive('createDbBackup')->andReturn('/tmp/mock_db_backup.sql.gz');
+            $mock->shouldReceive('deleteFile')->andReturn('success');
+            $mock->shouldReceive('restoreBackup')->andReturn('success');
+            $mock->shouldReceive('restoreDbBackup')->andReturn('success');
         });
     }
 
     public function test_user_can_list_backups(): void
     {
+        /** @var User $user */
         $user = User::factory()->create();
         Backup::factory()->count(3)->create(['user_id' => $user->id]);
 
@@ -41,6 +43,7 @@ class BackupManagementTest extends TestCase
 
     public function test_user_can_create_web_backup(): void
     {
+        /** @var User $user */
         $user = User::factory()->create();
         $domain = WebDomain::factory()->create(['user_id' => $user->id, 'domain' => 'example.com']);
 
@@ -60,6 +63,7 @@ class BackupManagementTest extends TestCase
 
     public function test_user_can_delete_backup(): void
     {
+        /** @var User $user */
         $user = User::factory()->create();
         $backup = Backup::factory()->create(['user_id' => $user->id]);
 
@@ -71,7 +75,9 @@ class BackupManagementTest extends TestCase
 
     public function test_user_cannot_manage_others_backups(): void
     {
+        /** @var User $user1 */
         $user1 = User::factory()->create();
+        /** @var User $user2 */
         $user2 = User::factory()->create();
         $backup = Backup::factory()->create(['user_id' => $user1->id]);
 

@@ -4,16 +4,31 @@ namespace Tests\Feature;
 
 use App\Models\MonitoringAlert;
 use App\Models\User;
+use App\Services\RustDaemonClient;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Mockery;
 use Tests\TestCase;
 
 class MonitoringAlertTest extends TestCase
 {
+    use RefreshDatabase;
+
     private User $user;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->user = User::factory()->create();
+
+        // Mock the daemon for all tests
+        $daemon = Mockery::mock(RustDaemonClient::class);
+        $daemon->shouldReceive('call')->with('get_system_stats')->andReturn([
+            'cpu_usage' => 50,
+            'memory' => ['total' => 100, 'used' => 50],
+            'disks' => [['total' => 100, 'available' => 50]],
+            'load_average' => [2.5],
+        ]);
+        $this->app->instance(RustDaemonClient::class, $daemon);
     }
 
     public function test_user_can_view_monitoring_alerts(): void
@@ -57,6 +72,56 @@ class MonitoringAlertTest extends TestCase
         $response->assertRedirect();
         $alert->refresh();
         $this->assertFalse($alert->is_enabled);
+    }
+
+    public function test_user_can_update_alert(): void
+    {
+        $alert = MonitoringAlert::factory()->for($this->user)->create();
+
+        $response = $this->actingAs($this->user)->patch("/monitoring/alerts/{$alert->id}", [
+            'name' => 'Updated Alert',
+            'threshold_percentage' => 90,
+            'notify_email' => true,
+        ]);
+
+        $response->assertRedirect();
+        $this->assertDatabaseHas('monitoring_alerts', [
+            'id' => $alert->id,
+            'name' => 'Updated Alert',
+            'threshold_percentage' => 90,
+        ]);
+    }
+
+    public function test_user_can_delete_alert(): void
+    {
+        $alert = MonitoringAlert::factory()->for($this->user)->create();
+
+        $response = $this->actingAs($this->user)->delete("/monitoring/alerts/{$alert->id}");
+
+        $response->assertRedirect();
+        $this->assertModelMissing($alert);
+    }
+
+    public function test_user_cannot_update_other_users_alert(): void
+    {
+        $otherUser = User::factory()->create();
+        $alert = MonitoringAlert::factory()->for($otherUser)->create();
+
+        $response = $this->actingAs($this->user)->patch("/monitoring/alerts/{$alert->id}", [
+            'name' => 'Hacked',
+        ]);
+
+        $response->assertForbidden();
+    }
+
+    public function test_user_cannot_delete_other_users_alert(): void
+    {
+        $otherUser = User::factory()->create();
+        $alert = MonitoringAlert::factory()->for($otherUser)->create();
+
+        $response = $this->actingAs($this->user)->delete("/monitoring/alerts/{$alert->id}");
+
+        $response->assertForbidden();
     }
 
     public function test_alert_triggered_detection(): void

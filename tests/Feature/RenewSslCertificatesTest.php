@@ -4,13 +4,25 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use App\Models\WebDomain;
+use App\Services\RustDaemonClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Process;
+use Mockery;
 use Tests\TestCase;
 
 class RenewSslCertificatesTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected $daemon;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // Mock the RustDaemonClient
+        $this->daemon = Mockery::mock(RustDaemonClient::class);
+        $this->app->instance(RustDaemonClient::class, $this->daemon);
+    }
 
     public function test_command_skips_domains_without_ssl(): void
     {
@@ -48,17 +60,17 @@ class RenewSslCertificatesTest extends TestCase
             'ssl_expires_at' => now()->addDays(15),
         ]);
 
-        // Mock the Process to avoid actual certbot calls
-        Process::fake([
-            'certbot renew --cert-name example.com *' => Process::result('', exitCode: 0),
-            'systemctl reload nginx *' => Process::result('', exitCode: 0),
-        ]);
+        // Expect the daemon to be called
+        $this->daemon->shouldReceive('requestSslCert')
+            ->once()
+            ->with('example.com', $user->email)
+            ->andReturn(true);
+
+        $this->daemon->shouldReceive('readFile')
+            ->andReturn('');
 
         $this->artisan('app:renew-ssl-certificates')
             ->assertExitCode(0);
-
-        // Verify process was called
-        Process::assertRan('certbot renew --cert-name example.com --non-interactive --agree-tos --no-eff-email 2>&1');
     }
 
     public function test_command_with_force_option(): void
@@ -71,17 +83,17 @@ class RenewSslCertificatesTest extends TestCase
             'ssl_expires_at' => now()->addDays(60),
         ]);
 
-        // Mock the Process to avoid actual certbot calls
-        Process::fake([
-            'certbot renew --cert-name example.com *' => Process::result('', exitCode: 0),
-            'systemctl reload nginx *' => Process::result('', exitCode: 0),
-        ]);
+        // Expect the daemon to be called even with valid certificate
+        $this->daemon->shouldReceive('requestSslCert')
+            ->once()
+            ->with('example.com', $user->email)
+            ->andReturn(true);
+
+        $this->daemon->shouldReceive('readFile')
+            ->andReturn('');
 
         $this->artisan('app:renew-ssl-certificates', ['--force' => true])
             ->assertExitCode(0);
-
-        // Verify process was called even with valid certificate
-        Process::assertRan('certbot renew --cert-name example.com --non-interactive --agree-tos --no-eff-email 2>&1');
     }
 
     public function test_command_with_specific_domain(): void
@@ -100,16 +112,17 @@ class RenewSslCertificatesTest extends TestCase
             'ssl_expires_at' => now()->addDays(15),
         ]);
 
-        // Mock the Process
-        Process::fake([
-            'certbot renew --cert-name example.com *' => Process::result('', exitCode: 0),
-            'systemctl reload nginx *' => Process::result('', exitCode: 0),
-        ]);
+        // Expect only example.com to be renewed
+        $this->daemon->shouldReceive('requestSslCert')
+            ->once()
+            ->with('example.com', $user->email)
+            ->andReturn(true);
+
+        $this->daemon->shouldReceive('readFile')
+            ->andReturn('');
 
         $this->artisan('app:renew-ssl-certificates', ['--domain' => 'example.com'])
             ->assertExitCode(0);
-
-        Process::assertRan('certbot renew --cert-name example.com --non-interactive --agree-tos --no-eff-email 2>&1');
     }
 
     public function test_command_handles_renewal_failure(): void
@@ -122,14 +135,12 @@ class RenewSslCertificatesTest extends TestCase
             'ssl_expires_at' => now()->addDays(15),
         ]);
 
-        // Mock certbot to fail
-        Process::fake([
-            'certbot renew --cert-name example.com *' => Process::result('Certificate renewal failed', exitCode: 1),
-        ]);
+        // Mock daemon to fail
+        $this->daemon->shouldReceive('requestSslCert')
+            ->once()
+            ->andThrow(new \Exception('Certificate renewal failed'));
 
         $this->artisan('app:renew-ssl-certificates')
             ->assertExitCode(0);
-
-        // Command should complete successfully but report the failure
     }
 }

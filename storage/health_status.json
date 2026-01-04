@@ -1,0 +1,5 @@
+{
+  "timestamp": "2026-01-04T05:39:40Z",
+  "overall_status": "OK",
+  "checks": {"application":{"status":"OK","message":"Application is running"},"database":{"status":"OK","message":"Database connected"},"cache":{"status":"OK","message":"Cache system operational"},"queue":{"status":"OK","message":"Queue system ready"},"disk_space":{"status":"OK","message":"Disk space adequate"},"ssl_certificates":{"status":"OK","message":"SSL certificates valid"},"backups":{"status":"OK","message":"Recent backups available"},"security_alerts":{"status":"OK","message":"No active security alerts"}}
+}

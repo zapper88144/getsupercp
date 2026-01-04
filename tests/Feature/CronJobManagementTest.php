@@ -6,7 +6,6 @@ use App\Models\CronJob;
 use App\Models\User;
 use App\Services\RustDaemonClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Mockery;
 use Tests\TestCase;
 
 class CronJobManagementTest extends TestCase
@@ -20,11 +19,13 @@ class CronJobManagementTest extends TestCase
         // Mock the RustDaemonClient to avoid actual socket calls
         $this->mock(RustDaemonClient::class, function ($mock) {
             $mock->shouldReceive('call')->andReturn(['status' => 'success']);
+            $mock->shouldReceive('updateCronJobs')->andReturn('success');
         });
     }
 
     public function test_user_can_list_cron_jobs(): void
     {
+        /** @var User $user */
         $user = User::factory()->create();
         CronJob::factory()->count(3)->create(['user_id' => $user->id]);
 
@@ -39,6 +40,7 @@ class CronJobManagementTest extends TestCase
 
     public function test_user_can_create_cron_job(): void
     {
+        /** @var User $user */
         $user = User::factory()->create();
 
         $response = $this->actingAs($user)->post(route('cron-jobs.store'), [
@@ -57,6 +59,7 @@ class CronJobManagementTest extends TestCase
 
     public function test_user_can_toggle_cron_job_status(): void
     {
+        /** @var User $user */
         $user = User::factory()->create();
         $cronJob = CronJob::factory()->create([
             'user_id' => $user->id,
@@ -76,6 +79,7 @@ class CronJobManagementTest extends TestCase
 
     public function test_user_can_delete_cron_job(): void
     {
+        /** @var User $user */
         $user = User::factory()->create();
         $cronJob = CronJob::factory()->create(['user_id' => $user->id]);
 
@@ -87,7 +91,9 @@ class CronJobManagementTest extends TestCase
 
     public function test_user_cannot_manage_others_cron_jobs(): void
     {
+        /** @var User $user1 */
         $user1 = User::factory()->create();
+        /** @var User $user2 */
         $user2 = User::factory()->create();
         $cronJob = CronJob::factory()->create(['user_id' => $user1->id]);
 

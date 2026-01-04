@@ -2,8 +2,9 @@
 
 namespace Tests\Feature;
 
-use App\Models\User;
 use App\Models\Database;
+use App\Models\User;
+use App\Services\RustDaemonClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -11,8 +12,18 @@ class DatabaseManagementTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->mock(RustDaemonClient::class, function ($mock) {
+            $mock->shouldReceive('call')->andReturn('success');
+        });
+    }
+
     public function test_user_can_list_databases(): void
     {
+        /** @var User $user */
         $user = User::factory()->create();
         Database::create([
             'user_id' => $user->id,
@@ -30,6 +41,7 @@ class DatabaseManagementTest extends TestCase
 
     public function test_user_can_create_database(): void
     {
+        /** @var User $user */
         $user = User::factory()->create();
 
         $response = $this->actingAs($user)->post('/databases', [
@@ -49,6 +61,7 @@ class DatabaseManagementTest extends TestCase
 
     public function test_user_can_delete_database(): void
     {
+        /** @var User $user */
         $user = User::factory()->create();
         $database = Database::create([
             'user_id' => $user->id,
