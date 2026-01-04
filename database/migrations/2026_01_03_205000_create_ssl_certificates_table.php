@@ -22,9 +22,9 @@ return new class extends Migration
             $table->dateTime('renewal_scheduled_at')->nullable();
             $table->boolean('auto_renewal_enabled')->default(true);
             $table->enum('status', ['pending', 'active', 'expired', 'renewing', 'failed'])->default('pending');
-            $table->text('validation_method')->default('dns'); // dns, http, tls-alpn
+            $table->string('validation_method')->default('dns'); // dns, http, tls-alpn
             $table->integer('renewal_attempts')->default(0);
-            $table->text('last_error')->nullable();
+            $table->longText('last_error')->nullable();
             $table->timestamps();
             $table->index(['user_id', 'status']);
             $table->index('expires_at');

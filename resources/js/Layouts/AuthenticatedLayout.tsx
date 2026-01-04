@@ -71,6 +71,13 @@ export default function Authenticated({
                         open={sidebarOpen}
                     />
                     <SidebarNavLink
+                        href={route('admin.database.manager')}
+                        active={route().current('admin.database.manager')}
+                        icon="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+                        label="DB Manager"
+                        open={sidebarOpen}
+                    />
+                    <SidebarNavLink
                         href={route('ftp-users.index')}
                         active={route().current('ftp-users.index')}
                         icon="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
@@ -135,72 +142,16 @@ export default function Authenticated({
                     />
                 </nav>
 
-                {/* User Section */}
-                <div className="absolute bottom-0 left-0 right-0 border-t border-gray-800 p-4">
-                    {sidebarOpen ? (
-                        <Dropdown>
-                            <Dropdown.Trigger>
-                                <button className="w-full rounded-lg bg-gray-800 px-3 py-2 text-sm text-left text-gray-200 hover:bg-gray-700 transition-colors">
-                                    <div className="font-medium truncate">{user.name}</div>
-                                    <div className="text-xs text-gray-400 truncate">{user.email}</div>
-                                </button>
-                            </Dropdown.Trigger>
-                            <Dropdown.Content>
-                                <Dropdown.Link href={route('profile.edit')}>
-                                    Profile
-                                </Dropdown.Link>
-                                <Dropdown.Link
-                                    href={route('logout')}
-                                    method="post"
-                                    as="button"
-                                >
-                                    Log Out
-                                </Dropdown.Link>
-                            </Dropdown.Content>
-                        </Dropdown>
-                    ) : (
-                        <div className="flex justify-center">
-                            <Dropdown>
-                                <Dropdown.Trigger>
-                                    <button className="rounded-full bg-gray-800 p-2 text-gray-200 hover:bg-gray-700">
-                                        <svg
-                                            className="h-5 w-5"
-                                            fill="currentColor"
-                                            viewBox="0 0 20 20"
-                                        >
-                                            <path
-                                                fillRule="evenodd"
-                                                d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z"
-                                                clipRule="evenodd"
-                                            />
-                                        </svg>
-                                    </button>
-                                </Dropdown.Trigger>
-                                <Dropdown.Content>
-                                    <Dropdown.Link href={route('profile.edit')}>
-                                        Profile
-                                    </Dropdown.Link>
-                                    <Dropdown.Link
-                                        href={route('logout')}
-                                        method="post"
-                                        as="button"
-                                    >
-                                        Log Out
-                                    </Dropdown.Link>
-                                </Dropdown.Content>
-                            </Dropdown>
-                        </div>
-                    )}
-                </div>
+
             </aside>
 
             {/* Main Content */}
             <div className={`transition-all duration-300 ${sidebarOpen ? 'lg:ml-64' : 'lg:ml-20'}`}>
                 {/* Top Bar */}
-                <div className="sticky top-0 z-30 flex h-16 items-center border-b border-gray-200 bg-white px-4 dark:border-gray-700 dark:bg-gray-800 lg:hidden">
+                <div className="sticky top-0 z-30 flex h-16 items-center border-b border-gray-200 bg-white px-4 dark:border-gray-700 dark:bg-gray-800">
                     <button
                         onClick={() => setSidebarOpen(!sidebarOpen)}
-                        className="rounded-lg p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        className="rounded-lg p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 lg:hidden"
                     >
                         <svg
                             className="h-6 w-6"

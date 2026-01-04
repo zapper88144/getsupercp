@@ -14,6 +14,7 @@ use App\Http\Controllers\FtpUserController;
 use App\Http\Controllers\LogController;
 use App\Http\Controllers\MonitoringAlertController;
 use App\Http\Controllers\MonitoringController;
+use App\Http\Controllers\PhpMyAdminController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\SecurityDashboardController;
 use App\Http\Controllers\ServiceController;
@@ -141,6 +142,30 @@ Route::middleware('auth')->group(function () {
     Route::get('/email/edit', [EmailServerConfigController::class, 'edit'])->name('email.edit');
     Route::patch('/email', [EmailServerConfigController::class, 'update'])->name('email.update');
     Route::post('/email/test', [EmailServerConfigController::class, 'test'])->name('email.test');
+
+    // phpMyAdmin integration routes
+    Route::middleware(['auth', 'VerifyPhpMyAdminAccess'])->group(function () {
+        Route::get('/admin/database/manager', [PhpMyAdminController::class, 'index'])
+            ->name('admin.database.manager');
+
+        // phpMyAdmin API routes for dashboard
+        Route::prefix('/api/phpmyadmin')->group(function () {
+            Route::get('/status', [PhpMyAdminController::class, 'status'])
+                ->name('api.phpmyadmin.status');
+
+            Route::get('/databases', [PhpMyAdminController::class, 'getDatabases'])
+                ->name('api.phpmyadmin.databases');
+
+            Route::get('/database/{name}', [PhpMyAdminController::class, 'getDatabase'])
+                ->name('api.phpmyadmin.database');
+
+            Route::post('/query', [PhpMyAdminController::class, 'executeQuery'])
+                ->name('api.phpmyadmin.query');
+
+            Route::get('/check', [PhpMyAdminController::class, 'check'])
+                ->name('api.phpmyadmin.check');
+        });
+    });
 });
 
 require __DIR__.'/auth.php';
