@@ -117,15 +117,18 @@ class BackupScheduleController extends Controller
 
         [$hours, $minutes] = explode(':', $time);
 
-        $next = today()->setHour($hours)->setMinute($minutes)->setSecond(0);
+        $next = today()->setHour((int) $hours)->setMinute((int) $minutes)->setSecond(0);
 
         if ($next->isPast()) {
-            $next = match ($frequency) {
-                'daily' => $next->addDay(),
-                'weekly' => $next->addWeek(),
-                'monthly' => $next->addMonth(),
-                default => $next->addDay(),
-            };
+            if ($frequency === 'daily') {
+                $next = $next->addDays(1);
+            } elseif ($frequency === 'weekly') {
+                $next = $next->addWeeks(1);
+            } elseif ($frequency === 'monthly') {
+                $next = $next->addMonths(1);
+            } else {
+                $next = $next->addDays(1);
+            }
         }
 
         return $next;

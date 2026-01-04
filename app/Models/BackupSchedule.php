@@ -83,13 +83,17 @@ class BackupSchedule extends Model
                 $next = $next->addDay();
             }
 
-            return match ($this->frequency) {
-                'hourly' => now()->addHour(),
-                'daily' => $next,
-                'weekly' => $next->addWeek(),
-                'monthly' => $next->addMonth(),
-                default => null,
-            };
+            if ($this->frequency === 'hourly') {
+                return now()->addHour();
+            } elseif ($this->frequency === 'daily') {
+                return $next;
+            } elseif ($this->frequency === 'weekly') {
+                return $next->addWeeks(1);
+            } elseif ($this->frequency === 'monthly') {
+                return $next->addMonths(1);
+            }
+
+            return null;
         } catch (\Throwable $e) {
             return now()->addDay();
         }
